@@ -15,10 +15,6 @@ export interface User {
         creationTime: string | undefined;
         lastSignInTime: string | undefined;
     };
-    // User-specific settings that might be synced to Firestore
-    // For now, these are global in Zustand, but could be moved to user document
-    // darkMode: boolean;
-    // language: 'en' | 'fr' | 'es';
 }
 export interface Course {
     id: string
