@@ -22,8 +22,12 @@ export default function CourseCard({ course }: CourseCardProps) {
                     <FiBookOpen size={40} className="text-blue-600 opacity-20 sm:h-12 sm:w-12" />
                     <div className="absolute inset-0 flex items-center justify-center">
                         <div className="text-center px-3 sm:px-4">
-                            <h3 className="font-bold text-lg sm:text-xl text-gray-900 mb-1 line-clamp-2">{course.title}</h3>
-                            <p className="text-blue-600 font-medium text-sm sm:text-base">{course.code}</p>
+                            <h3 className="font-bold text-lg sm:text-xl text-gray-900 mb-1 line-clamp-2">
+                                {course.code}
+                            </h3>
+                            <p className="text-blue-600 font-medium text-sm sm:text-base">
+                                {course.title}
+                            </p>
                         </div>
                     </div>
                 </div>
