@@ -244,7 +244,7 @@ export default function NotesTab() {
                     </div>
                 ) : (
                     <div className="flex-1 flex flex-col">
-                        <div className="flex flex-wrap justify-between items-center mb-4 pb-4 border-b border-gray-200 gap-2">
+                        <div className="flex flex-wrap justify-between items-center mb-4 pb-4 gap-2">
                             {isEditing ? (
                                 <input
                                     type="text"
