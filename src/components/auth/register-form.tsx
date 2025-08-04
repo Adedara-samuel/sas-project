@@ -5,7 +5,6 @@ import { useState } from 'react'
 import { createUserWithEmailAndPassword } from 'firebase/auth'
 import { auth, db } from '@/lib/firebase'
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
-// import { useRouter } from 'next/navigation'
 import { FiUser, FiMail, FiLock, FiBook, FiHash, FiAlertCircle } from 'react-icons/fi'
 
 export default function RegisterForm() {
@@ -16,7 +15,6 @@ export default function RegisterForm() {
     const [department, setDepartment] = useState('')
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(false)
-    // const router = useRouter()
 
     const handleRegister = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -35,9 +33,6 @@ export default function RegisterForm() {
                 createdAt: serverTimestamp(),
                 role: 'student'
             })
-
-            // No setTimeout needed. The AuthProvider will handle the redirect
-            // once the Firebase auth state changes.
         } catch (err: any) {
             setError(err.message.replace(' ', ''))
             setLoading(false)
@@ -45,16 +40,16 @@ export default function RegisterForm() {
     }
 
     return (
-        <form onSubmit={handleRegister} className="space-y-4">
+        <form onSubmit={handleRegister} className="space-y-4 w-full max-w-lg mx-auto px-4 sm:px-0">
             {error && (
-                <div className="flex items-center p-4 bg-red-50 rounded-lg text-red-700">
-                    <FiAlertCircle className="mr-2" />
+                <div className="flex items-center p-3 bg-red-50 rounded-lg text-red-700 text-sm">
+                    <FiAlertCircle className="mr-2 h-5 w-5" />
                     {error}
                 </div>
             )}
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="col-span-2 sm:col-span-2">
+            <div className="grid grid-cols-1 gap-4">
+                <div>
                     <label htmlFor="fullName" className="block text-sm font-medium text-gray-700">
                         Full Name
                     </label>
@@ -69,7 +64,7 @@ export default function RegisterForm() {
                             required
                             value={fullName}
                             onChange={(e) => setFullName(e.target.value)}
-                            className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md py-3 border text-black"
+                            className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-10 text-sm border-gray-300 rounded-md py-2.5 border text-black sm:text-base sm:py-3"
                             placeholder="John Doe"
                         />
                     </div>
@@ -90,7 +85,7 @@ export default function RegisterForm() {
                             required
                             value={matricNumber}
                             onChange={(e) => setMatricNumber(e.target.value)}
-                            className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md py-3 border text-black"
+                            className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-10 text-sm border-gray-300 rounded-md py-2.5 border text-black sm:text-base sm:py-3"
                             placeholder="U20XXXXXX"
                         />
                     </div>
@@ -111,13 +106,13 @@ export default function RegisterForm() {
                             required
                             value={department}
                             onChange={(e) => setDepartment(e.target.value)}
-                            className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md py-3 border text-black"
+                            className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-10 text-sm border-gray-300 rounded-md py-2.5 border text-black sm:text-base sm:py-3"
                             placeholder="Computer Science"
                         />
                     </div>
                 </div>
 
-                <div className="col-span-2">
+                <div>
                     <label htmlFor="email" className="block text-sm font-medium text-gray-700">
                         Email Address
                     </label>
@@ -133,13 +128,13 @@ export default function RegisterForm() {
                             required
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
-                            className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md py-3 border text-black"
+                            className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-10 text-sm border-gray-300 rounded-md py-2.5 border text-black sm:text-base sm:py-3"
                             placeholder="your@school.edu"
                         />
                     </div>
                 </div>
 
-                <div className="col-span-2">
+                <div>
                     <label htmlFor="password" className="block text-sm font-medium text-gray-700">
                         Password
                     </label>
@@ -155,7 +150,7 @@ export default function RegisterForm() {
                             required
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md py-3 border text-black"
+                            className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-10 text-sm border-gray-300 rounded-md py-2.5 border text-black sm:text-base sm:py-3"
                             placeholder="••••••••"
                             minLength={6}
                         />
@@ -183,7 +178,7 @@ export default function RegisterForm() {
                 <button
                     type="submit"
                     disabled={loading}
-                    className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed"
+                    className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed sm:py-3 sm:text-base"
                 >
                     {loading ? (
                         <span className="flex items-center">

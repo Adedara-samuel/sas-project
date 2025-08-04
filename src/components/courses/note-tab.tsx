@@ -53,13 +53,10 @@ export default function NotesTab() {
             setNotes(fetchedNotes);
             setLoading(false);
 
-            // If activeNote was deleted or no longer exists, clear it
             if (activeNote && !fetchedNotes.some(n => n.id === activeNote.id)) {
                 setActiveNote(null);
-                setIsEditing(false); // Exit editing mode if active note is gone
+                setIsEditing(false);
             }
-            // If no active note, and notes exist, select the first one by default
-            // Only if not currently creating a new note
             if (!activeNote && fetchedNotes.length > 0 && !isEditing) {
                 setActiveNote(fetchedNotes[0]);
             }
@@ -70,8 +67,8 @@ export default function NotesTab() {
             setLoading(false);
         });
 
-        return () => unsubscribe(); // Cleanup listener on unmount
-    }, [authChecked, user?.uid, currentCourse?.id, activeNote, isEditing]); // Added isEditing to deps
+        return () => unsubscribe();
+    }, [authChecked, user?.uid, currentCourse?.id, activeNote, isEditing]);
 
     // Update form fields when active note changes
     useEffect(() => {
@@ -111,23 +108,20 @@ export default function NotesTab() {
             };
 
             if (activeNote && isEditing) {
-                // Update existing note
                 await updateDoc(doc(db, 'notes', activeNote.id), noteData);
                 setMessage({ text: 'Note updated successfully!', type: 'success' });
             } else {
-                // Create new note
                 const newNoteRef = doc(collection(db, 'notes'));
                 await setDoc(newNoteRef, { ...noteData, createdAt: Timestamp.now() });
                 setMessage({ text: 'Note created successfully!', type: 'success' });
-                // Set the newly created note as active
                 setActiveNote({
                     id: newNoteRef.id,
-                    ...noteData, // Use the data sent to Firestore
-                    createdAt: new Date(), // Convert Timestamp to Date for local state
+                    ...noteData,
+                    createdAt: new Date(),
                     updatedAt: new Date()
-                } as Note); // Cast to Note
+                } as Note);
             }
-            setIsEditing(false); // Exit editing mode
+            setIsEditing(false);
         } catch (error: any) {
             console.error('Error saving note:', error);
             setMessage({ text: `Failed to save note: ${error.message || 'Unknown error'}`, type: 'error' });
@@ -140,13 +134,13 @@ export default function NotesTab() {
         if (!user?.uid || !currentCourse?.id) return;
 
         if (window.confirm("Are you sure you want to delete this note? This action cannot be undone.")) {
-            setSaving(true); // Use saving state for delete too
+            setSaving(true);
             setMessage(null);
             try {
                 await deleteDoc(doc(db, 'notes', noteId));
                 setMessage({ text: 'Note deleted successfully!', type: 'success' });
-                setActiveNote(null); // Clear active note after deletion
-                setIsEditing(false); // Exit editing mode
+                setActiveNote(null);
+                setIsEditing(false);
             } catch (error: any) {
                 console.error('Error deleting note:', error);
                 setMessage({ text: `Failed to delete note: ${error.message || 'Unknown error'}`, type: 'error' });
@@ -157,16 +151,16 @@ export default function NotesTab() {
     };
 
     const handleNewNoteClick = () => {
-        setActiveNote(null); // Clear active note to show empty form
+        setActiveNote(null);
         setTitle('');
         setContent('');
-        setIsEditing(true); // Enter editing mode for new note
-        setMessage(null); // Clear any previous messages
+        setIsEditing(true);
+        setMessage(null);
     };
 
     if (!currentCourse) {
         return (
-            <div className="flex justify-center items-center py-8 text-gray-600">
+            <div className="flex justify-center items-center p-8 text-gray-500 min-h-[500px]">
                 <p>Please select a course to view its notes.</p>
             </div>
         );
@@ -174,20 +168,20 @@ export default function NotesTab() {
 
     if (loading) {
         return (
-            <div className="flex justify-center items-center py-8">
+            <div className="flex justify-center items-center p-8 min-h-[500px]">
                 <LoadingSpinner />
             </div>
         );
     }
 
     return (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 p-4 h-full">
+        <div className="flex flex-col md:flex-row gap-6 p-4 h-full">
             {/* Left Column: Note List */}
-            <div className="md:col-span-1 bg-white rounded-xl shadow-md flex flex-col overflow-hidden">
-                <div className="p-4 border-b border-gray-200 flex justify-between items-center">
-                    <h3 className="text-xl font-semibold text-gray-900">Your Notes</h3>
+            <div className="md:w-1/3 bg-white rounded-xl shadow-lg flex flex-col min-h-[400px] max-h-[calc(100vh-200px)] overflow-hidden">
+                <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+                    <h3 className="text-xl font-semibold text-gray-800">Your Notes</h3>
                     <button
-                        onClick={handleNewNoteClick} // FIX: Assign handleNewNoteClick to the plus button
+                        onClick={handleNewNoteClick}
                         className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-full shadow-md transition-all duration-200"
                         title="Create New Note"
                         disabled={saving}
@@ -195,10 +189,10 @@ export default function NotesTab() {
                         <FiPlus className="text-lg" />
                     </button>
                 </div>
-                <div className="flex-1 overflow-y-auto py-2">
+                <div className="flex-1 overflow-y-auto">
                     {notes.length === 0 ? (
-                        <div className="text-center text-gray-500 text-sm p-4">
-                            No notes yet for this course. Click '+' to create one.
+                        <div className="text-center text-gray-500 text-sm p-6">
+                            No notes yet for this course. Click the '+' button to create one.
                         </div>
                     ) : (
                         <ul className="divide-y divide-gray-100">
@@ -207,18 +201,21 @@ export default function NotesTab() {
                                     key={note.id}
                                     onClick={() => {
                                         setActiveNote(note);
-                                        setIsEditing(false); // Switch to view mode when selecting
+                                        setIsEditing(false);
                                         setMessage(null);
                                     }}
-                                    className={`p-4 cursor-pointer transition-colors duration-200
-                                        ${activeNote?.id === note.id ? 'bg-blue-100 text-blue-800 font-semibold' : 'hover:bg-gray-50 text-gray-700'}`}
+                                    className={`p-4 cursor-pointer transition-colors duration-200 border-l-4
+                                        ${activeNote?.id === note.id
+                                            ? 'bg-blue-50 border-blue-600 text-blue-800 font-semibold'
+                                            : 'hover:bg-gray-100 border-transparent text-gray-700'
+                                        }`}
                                 >
                                     <h4 className="text-lg font-medium truncate">{note.title}</h4>
                                     <p className="text-sm truncate mt-1 text-gray-500">
                                         {note.content.substring(0, 70)}{note.content.length > 70 ? '...' : ''}
                                     </p>
-                                    <p className="text-xs text-gray-400 mt-1">
-                                        Last updated: {note.updatedAt.toLocaleDateString()}
+                                    <p className="text-xs text-gray-400 mt-2">
+                                        Updated: {note.updatedAt.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
                                     </p>
                                 </li>
                             ))}
@@ -228,30 +225,30 @@ export default function NotesTab() {
             </div>
 
             {/* Right Column: Note Viewer/Editor */}
-            <div className="md:col-span-2 bg-white rounded-xl shadow-md p-6 flex flex-col">
+            <div className="md:w-2/3 bg-white rounded-xl shadow-lg flex flex-col p-6 min-h-[400px] max-h-[calc(100vh-200px)]">
                 {message && (
-                    <div className={`mb-4 p-3 rounded-lg flex items-center space-x-2 ${message.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                        {message.type === 'success' ? <FiCheckCircle /> : <FiXCircle />}
+                    <div className={`mb-4 p-3 rounded-lg flex items-center space-x-2 text-sm ${message.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                        {message.type === 'success' ? <FiCheckCircle className="flex-shrink-0" /> : <FiXCircle className="flex-shrink-0" />}
                         <span>{message.text}</span>
                     </div>
                 )}
 
                 {!activeNote && !isEditing ? (
-                    <div className="flex-1 flex flex-col items-center justify-center text-gray-500 text-center">
-                        <FiFileText size={64} className="mb-4 opacity-30" />
-                        <p className="text-lg font-medium">Select a note or create a new one</p>
-                        <p className="text-sm mt-1">Your notes will appear here.</p>
+                    <div className="flex-1 flex flex-col items-center justify-center text-gray-400 text-center">
+                        <FiFileText size={80} className="mb-4" />
+                        <p className="text-xl font-medium">Select a note or create a new one</p>
+                        <p className="text-sm mt-2">Your notes will appear here.</p>
                     </div>
                 ) : (
                     <div className="flex-1 flex flex-col">
-                        <div className="flex justify-between items-center mb-4">
+                        <div className="flex justify-between items-center mb-4 pb-4 border-b border-gray-200">
                             {isEditing ? (
                                 <input
                                     type="text"
                                     value={title}
                                     onChange={(e) => setTitle(e.target.value)}
                                     placeholder="Note title"
-                                    className="flex-1 text-2xl font-bold text-gray-900 p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                                    className="flex-1 text-2xl font-bold text-gray-900 p-2 border-b-2 border-gray-300 focus:border-blue-500 outline-none transition-colors"
                                 />
                             ) : (
                                 <h3 className="text-2xl font-bold text-gray-900">{activeNote?.title}</h3>
@@ -262,48 +259,54 @@ export default function NotesTab() {
                                         <button
                                             onClick={() => {
                                                 setIsEditing(false);
-                                                // Reset content/title if cancelling edit of existing note
                                                 if (activeNote) {
                                                     setTitle(activeNote.title);
                                                     setContent(activeNote.content);
-                                                } else { // If cancelling new note
+                                                } else {
                                                     setTitle('');
                                                     setContent('');
                                                 }
                                                 setMessage(null);
                                             }}
-                                            className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg flex items-center hover:bg-gray-50 transition-colors"
+                                            className="p-2 md:px-4 md:py-2 border border-gray-300 text-gray-700 rounded-lg flex items-center hover:bg-gray-100 transition-colors"
                                             disabled={saving}
+                                            title="Cancel"
                                         >
-                                            <FiXCircle className="mr-2" /> Cancel
+                                            <FiXCircle className="text-lg" />
+                                            <span className="hidden md:inline ml-2">Cancel</span>
                                         </button>
                                         <button
                                             onClick={handleSaveNote}
-                                            className="px-4 py-2 bg-blue-600 text-white rounded-lg flex items-center hover:bg-blue-700 transition-colors"
+                                            className="p-2 md:px-4 md:py-2 bg-blue-600 text-white rounded-lg flex items-center hover:bg-blue-700 transition-colors"
                                             disabled={saving || !title.trim() || !content.trim()}
+                                            title={activeNote ? 'Update' : 'Save'}
                                         >
                                             {saving ? (
                                                 <LoadingSpinner size="sm" />
                                             ) : (
-                                                <FiSave className="mr-2" />
+                                                <FiSave className="text-lg" />
                                             )}
-                                            {activeNote ? 'Update' : 'Save'}
+                                            <span className="hidden md:inline ml-2">{activeNote ? 'Update' : 'Save'}</span>
                                         </button>
                                     </>
                                 ) : (
                                     <>
                                         <button
                                             onClick={() => setIsEditing(true)}
-                                            className="px-4 py-2 border border-blue-600 text-blue-600 rounded-lg flex items-center hover:bg-blue-50 transition-colors"
+                                            className="p-2 md:px-4 md:py-2 border border-blue-600 text-blue-600 rounded-lg flex items-center hover:bg-blue-50 transition-colors"
+                                            title="Edit"
                                         >
-                                            <FiEdit className="mr-2" /> Edit
+                                            <FiEdit className="text-lg" />
+                                            <span className="hidden md:inline ml-2">Edit</span>
                                         </button>
                                         <button
                                             onClick={() => activeNote && handleDeleteNote(activeNote.id)}
-                                            className="px-4 py-2 border border-red-600 text-red-600 rounded-lg flex items-center hover:bg-red-50 transition-colors"
+                                            className="p-2 md:px-4 md:py-2 border border-red-600 text-red-600 rounded-lg flex items-center hover:bg-red-50 transition-colors"
                                             disabled={saving}
+                                            title="Delete"
                                         >
-                                            <FiTrash2 className="mr-2" /> Delete
+                                            <FiTrash2 className="text-lg" />
+                                            <span className="hidden md:inline ml-2">Delete</span>
                                         </button>
                                     </>
                                 )}

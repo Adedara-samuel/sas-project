@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -9,7 +10,7 @@ import LoadingSpinner from '@/components/ui/loading-spinner'
 import Link from 'next/link'
 
 export default function UpcomingSchedule() {
-    const { user, authChecked, courses } = useStore() // Get courses to resolve titles
+    const { user, authChecked, courses } = useStore()
     const [upcomingSchedules, setUpcomingSchedules] = useState<Schedule[]>([])
     const [loading, setLoading] = useState(true)
 

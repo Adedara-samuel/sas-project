@@ -4,7 +4,22 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { FiSend, FiMessageSquare, FiUser, FiCpu, FiUploadCloud, FiFileText, FiDownload, FiExternalLink, FiFile, FiPlus, FiTrash2, FiXCircle, FiFilePlus } from 'react-icons/fi'
+import {
+    FiSend,
+    FiMessageSquare,
+    FiUser,
+    FiCpu,
+    FiUploadCloud,
+    FiFileText,
+    FiDownload,
+    FiExternalLink,
+    FiFile,
+    FiPlus,
+    FiTrash2,
+    FiXCircle,
+    FiFilePlus,
+    FiMenu
+} from 'react-icons/fi'
 import { getAIResponse } from '@/lib/gemini'
 import LoadingSpinner from '@/components/ui/loading-spinner'
 import { db, storage } from '@/lib/firebase'
@@ -36,8 +51,8 @@ export default function ChatInterface({
     placeholder,
     chatType,
     courseId,
-    userDisplayName, // Destructure from props
-    userRole // Destructure from props
+    userDisplayName,
+    userRole
 }: ChatInterfaceProps) {
     const { user, authChecked, currentCourse } = useStore();
     const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -49,6 +64,7 @@ export default function ChatInterface({
     const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
     const [loadingSessions, setLoadingSessions] = useState(true);
     const [loadingMessages, setLoadingMessages] = useState(false);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false); // New state for sidebar visibility
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     // Auto-scroll to the bottom
@@ -58,7 +74,6 @@ export default function ChatInterface({
 
     // --- Chat Session Management ---
 
-    // Fetch chat sessions for the current user
     useEffect(() => {
         if (!authChecked || !user?.uid) {
             setLoadingSessions(false);
@@ -71,7 +86,7 @@ export default function ChatInterface({
         const q = query(
             collection(db, 'ai_chat_sessions'),
             where('userId', '==', user.uid),
-            where('courseId', '==', courseId || null) // Filter by courseId or null for general chats
+            where('courseId', '==', courseId || null)
         );
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -86,18 +101,16 @@ export default function ChatInterface({
                     createdAt: data.createdAt instanceof Timestamp ? data.createdAt : Timestamp.fromDate(new Date()),
                     updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt : Timestamp.fromDate(new Date()),
                 };
-            }).sort((a, b) => b.updatedAt.toMillis() - a.updatedAt.toMillis()); // Sort by most recent
+            }).sort((a, b) => b.updatedAt.toMillis() - a.updatedAt.toMillis());
 
             setChatSessions(fetchedSessions);
             setLoadingSessions(false);
 
-            // If no session is active, or the current one was deleted, select the first or create new
             if (!currentSessionId || !fetchedSessions.some(s => s.id === currentSessionId)) {
                 if (fetchedSessions.length > 0) {
                     setCurrentSessionId(fetchedSessions[0].id);
                 } else {
-                    // Automatically create a new chat if no sessions exist for this type
-                    handleNewChat(true); // Pass true to indicate auto-creation
+                    handleNewChat(true);
                 }
             }
         }, (error) => {
@@ -106,9 +119,8 @@ export default function ChatInterface({
         });
 
         return () => unsubscribe();
-    }, [authChecked, user?.uid, courseId, currentSessionId]); // currentSessionId in deps to react to external changes
+    }, [authChecked, user?.uid, courseId, currentSessionId]);
 
-    // Load messages for the currently selected session
     useEffect(() => {
         if (!currentSessionId || !authChecked || !user?.uid) {
             setMessages([]);
@@ -121,14 +133,13 @@ export default function ChatInterface({
         const unsubscribe = onSnapshot(sessionDocRef, (docSnap) => {
             if (docSnap.exists()) {
                 const sessionData = docSnap.data() as ChatSession;
-                // Ensure messages are properly typed and sorted by timestamp
                 const loadedMessages: ChatMessage[] = sessionData.messages.map((msg: any) => ({
                     ...msg,
                     timestamp: msg.timestamp instanceof Timestamp ? msg.timestamp : Timestamp.fromDate(new Date(msg.timestamp.seconds * 1000))
                 })).sort((a: ChatMessage, b: ChatMessage) => a.timestamp.toMillis() - b.timestamp.toMillis());
                 setMessages(loadedMessages);
             } else {
-                setMessages([]); // Session might have been deleted
+                setMessages([]);
             }
             setLoadingMessages(false);
         }, (error) => {
@@ -137,7 +148,7 @@ export default function ChatInterface({
         });
 
         return () => unsubscribe();
-    }, [currentSessionId, authChecked, user?.uid]); // Re-run when currentSessionId changes
+    }, [currentSessionId, authChecked, user?.uid]);
 
     const updateChatSessionInFirestore = useCallback(async (newMessage: ChatMessage) => {
         if (!currentSessionId || !user?.uid) {
@@ -151,10 +162,8 @@ export default function ChatInterface({
                 messages: arrayUnion(newMessage),
                 updatedAt: Timestamp.now(),
             });
-            console.log("Chat session updated in Firestore.");
         } catch (error) {
             console.error("Error updating chat session in Firestore:", error);
-            // Optionally display error message
         }
     }, [currentSessionId, user?.uid]);
 
@@ -182,13 +191,16 @@ export default function ChatInterface({
 
             await setDoc(newSessionRef, newSession);
             setCurrentSessionId(newSessionId);
-            setMessages([]); // Clear current messages for the new chat
-            setInput(''); // Clear input
-            setSelectedFile(null); // Clear selected file
-            console.log("New chat session created:", newSessionId);
+            setMessages([]);
+            setInput('');
+            setSelectedFile(null);
+            
+            // On mobile, close the sidebar after creating a new chat
+            if (isSidebarOpen) {
+                setIsSidebarOpen(false);
+            }
 
             if (!isAutoCreate) {
-                // If manually created, immediately ask the AI a greeting
                 const greetingMessage: ChatMessage = {
                     role: 'assistant',
                     content: chatType === 'course' && currentCourse?.title
@@ -202,7 +214,6 @@ export default function ChatInterface({
 
         } catch (error) {
             console.error("Error creating new chat session:", error);
-            // Optionally show error to user
         } finally {
             setIsLoading(false);
         }
@@ -215,11 +226,8 @@ export default function ChatInterface({
             try {
                 await deleteDoc(doc(db, 'ai_chat_sessions', sessionId));
                 console.log("Chat session deleted:", sessionId);
-                // The onSnapshot listener will automatically update chatSessions state
-                // and trigger re-selection of a new session or creation of one.
             } catch (error) {
                 console.error("Error deleting chat session:", error);
-                // Optionally show error to user
             }
         }
     };
@@ -238,7 +246,7 @@ export default function ChatInterface({
         setIsLoading(true);
 
         try {
-            await updateChatSessionInFirestore(userMessage); // Save user message
+            await updateChatSessionInFirestore(userMessage);
 
             let fullAIContext = initialContext;
             if (userDisplayName) {
@@ -248,13 +256,11 @@ export default function ChatInterface({
                 fullAIContext += ` Their role is ${userRole}.`;
             }
 
-            // Send full chat history for context to the AI
-            // FIX: Ensure the history passed to getAIResponse is of type ChatMessage[]
-            const response = await getAIResponse(userMessage.content, fullAIContext, messages); // Pass messages directly
+            const response = await getAIResponse(userMessage.content, fullAIContext, messages);
 
             const assistantMessage: ChatMessage = { role: 'assistant', content: response, timestamp: Timestamp.now() };
             setMessages(prev => [...prev, assistantMessage]);
-            await updateChatSessionInFirestore(assistantMessage); // Save assistant message
+            await updateChatSessionInFirestore(assistantMessage);
 
         } catch (error) {
             console.error('Error getting AI response or saving chat:', error);
@@ -290,7 +296,6 @@ export default function ChatInterface({
             const snapshot = await uploadBytes(storageRef, selectedFile);
             const downloadURL = await getDownloadURL(snapshot.ref);
 
-            // Display a temporary file message in the chat (NOT PERSISTED IN FIRESTORE)
             const fileMessage: ChatMessage = {
                 role: 'file',
                 content: `Uploaded: ${selectedFile.name}`,
@@ -302,7 +307,7 @@ export default function ChatInterface({
             };
             setMessages(prev => [...prev, fileMessage]);
 
-            setSelectedFile(null); // Clear selected file
+            setSelectedFile(null);
         } catch (error) {
             console.error("Error uploading file in chat:", error);
             const errorMessage: ChatMessage = {
@@ -317,13 +322,17 @@ export default function ChatInterface({
     };
 
     const currentChatTitle = chatSessions.find(s => s.id === currentSessionId)?.title || (chatType === 'course' && currentCourse?.title ? `Chat for ${currentCourse.title}` : "General Chat");
-    const currentChatSubtitle = chatType === 'course' && currentCourse?.code ? currentCourse.code : "Your smart companion for all things academic."; // FIX: Re-added subtitle logic
-
+    const currentChatSubtitle = chatType === 'course' && currentCourse?.code ? currentCourse.code : "Your smart companion for all things academic.";
 
     return (
-        <div className="flex h-[calc(100vh-64px-4rem)] bg-gray-50 rounded-2xl overflow-hidden">
-            {/* Sidebar for Chat History */}
-            <div className="w-64 bg-white border-r border-gray-200 flex flex-col flex-shrink-0">
+        <div className="flex h-full bg-gray-50 rounded-2xl overflow-hidden relative">
+
+            {/* Sidebar for Chat History (Responsive) */}
+            <div className={`
+                absolute inset-y-0 left-0 z-20 w-64 bg-white border-r border-gray-200 flex-col flex-shrink-0
+                transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0
+                ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+            `}>
                 <div className="p-4 border-b border-gray-200 flex items-center justify-between">
                     <h2 className="text-xl font-bold text-gray-900">Chats</h2>
                     <button
@@ -333,6 +342,14 @@ export default function ChatInterface({
                         disabled={isLoading || uploadingFile}
                     >
                         <FiPlus className="text-lg" />
+                    </button>
+                    {/* Close button for mobile sidebar */}
+                    <button
+                        onClick={() => setIsSidebarOpen(false)}
+                        className="p-1 md:hidden"
+                        aria-label="Close chat history"
+                    >
+                        <FiXCircle className="text-gray-500 text-2xl" />
                     </button>
                 </div>
                 <div className="flex-1 overflow-y-auto py-2">
@@ -350,7 +367,10 @@ export default function ChatInterface({
                             {chatSessions.map(session => (
                                 <li key={session.id} className="relative">
                                     <button
-                                        onClick={() => setCurrentSessionId(session.id)}
+                                        onClick={() => {
+                                            setCurrentSessionId(session.id);
+                                            setIsSidebarOpen(false); // Close sidebar on selection
+                                        }}
                                         className={`w-full text-left px-4 py-3 text-gray-700 hover:bg-gray-100 transition-colors duration-200 flex items-center justify-between
                                             ${session.id === currentSessionId ? 'bg-blue-100 text-blue-800 font-semibold' : ''}`}
                                         disabled={isLoading || uploadingFile}
@@ -378,25 +398,31 @@ export default function ChatInterface({
             </div>
 
             {/* Main Chat Area */}
-            <div className="flex-1 flex flex-col bg-white">
+            <div className="flex-1 flex flex-col bg-white z-10">
                 {/* Chat Header */}
-                <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-6 text-white shadow-md flex-shrink-0">
-                    <h1 className="text-2xl font-bold flex items-center">
-                        <FiMessageSquare className="mr-3 text-3xl" />
-                        {currentChatTitle}
-                    </h1>
-                    <p className="text-sm opacity-90 mt-1">{currentChatSubtitle}</p> {/* FIX: Use currentChatSubtitle */}
+                <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-4 sm:p-6 text-white shadow-md flex-shrink-0 flex items-center">
+                    {/* Mobile-only toggle button for sidebar */}
+                    <button onClick={() => setIsSidebarOpen(true)} className="p-2 mr-3 md:hidden">
+                        <FiMenu className="text-2xl" />
+                    </button>
+                    <div className="flex-1">
+                        <h1 className="text-xl sm:text-2xl font-bold flex items-center">
+                            <FiMessageSquare className="mr-3 text-xl sm:text-3xl hidden sm:block" />
+                            {currentChatTitle}
+                        </h1>
+                        <p className="text-sm opacity-90 mt-1 hidden sm:block">{currentChatSubtitle}</p>
+                    </div>
                 </div>
 
                 {/* Chat Messages Area */}
-                <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50">
+                <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-gray-50">
                     {loadingMessages ? (
                         <div className="h-full flex flex-col items-center justify-center text-gray-500 text-center">
                             <LoadingSpinner />
                             <p className="mt-3">Loading messages...</p>
                         </div>
                     ) : messages.length === 0 ? (
-                        <div className="h-full flex flex-col items-center justify-center text-gray-500 text-center">
+                        <div className="h-full flex flex-col items-center justify-center text-gray-500 text-center p-4">
                             <FiMessageSquare size={64} className="mb-4 opacity-30" />
                             <p className="text-lg font-medium">Start a conversation with your AI assistant</p>
                             <p className="text-sm mt-1">{placeholder}</p>
@@ -410,14 +436,14 @@ export default function ChatInterface({
                                 {message.role === 'file' ? (
                                     <div className="max-w-[80%] p-4 rounded-xl shadow-sm bg-blue-100 text-blue-800 flex items-center space-x-3">
                                         {getFileIcon(message.fileType)}
-                                        <span className="font-medium">{message.fileName}</span>
-                                        <div className="flex space-x-2">
+                                        <span className="font-medium truncate">{message.fileName}</span>
+                                        <div className="flex space-x-2 flex-shrink-0">
                                             {message.fileUrl && (
                                                 <>
-                                                    <a href={message.fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline" title="View File">
+                                                    <a href={message.fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800" title="View File">
                                                         <FiExternalLink />
                                                     </a>
-                                                    <a href={message.fileUrl} download={message.fileName} className="text-blue-600 hover:underline" title="Download File">
+                                                    <a href={message.fileUrl} download={message.fileName} className="text-blue-600 hover:text-blue-800" title="Download File">
                                                         <FiDownload />
                                                     </a>
                                                 </>
@@ -433,7 +459,7 @@ export default function ChatInterface({
                                             }`}
                                     >
                                         {message.role === 'assistant' && <FiCpu className="text-xl mt-1 flex-shrink-0" />}
-                                        <p className="text-base leading-relaxed">{message.content}</p>
+                                        <p className="text-base leading-relaxed break-words">{message.content}</p>
                                         {message.role === 'user' && <FiUser className="text-xl mt-1 flex-shrink-0" />}
                                     </div>
                                 )}
@@ -456,15 +482,14 @@ export default function ChatInterface({
                             </div>
                         </div>
                     )}
-                    <div ref={messagesEndRef} /> {/* Scroll target */}
+                    <div ref={messagesEndRef} />
                 </div>
 
                 {/* Input Area */}
-                <div className="p-6 border-t border-gray-200 bg-white flex-shrink-0">
-                    <div className="flex space-x-3 items-center">
-                        {/* File Input */}
-                        <label htmlFor="file-upload" className="cursor-pointer p-3 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors duration-200">
-                            <FiUploadCloud className="text-xl" />
+                <div className="p-4 sm:p-6 border-t border-gray-200 bg-white flex-shrink-0">
+                    <div className="flex space-x-2 sm:space-x-3 items-center">
+                        <label htmlFor="file-upload" className="cursor-pointer p-2 sm:p-3 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors duration-200">
+                            <FiUploadCloud className="text-xl sm:text-2xl" />
                             <input
                                 id="file-upload"
                                 type="file"
@@ -477,7 +502,7 @@ export default function ChatInterface({
 
                         {selectedFile && (
                             <div className="flex items-center space-x-2 bg-gray-100 p-2 rounded-lg text-gray-700 text-sm">
-                                <span>{selectedFile.name}</span>
+                                <span className="truncate max-w-[120px] sm:max-w-none">{selectedFile.name}</span>
                                 <button onClick={() => setSelectedFile(null)} className="text-red-500 hover:text-red-700">
                                     <FiXCircle size={16} />
                                 </button>
@@ -490,34 +515,23 @@ export default function ChatInterface({
                             onChange={(e) => setInput(e.target.value)}
                             onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
                             placeholder={placeholder}
-                            className="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 placeholder-gray-500 transition-colors duration-200"
+                            className="flex-1 p-2 sm:p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 placeholder-gray-500 transition-colors duration-200"
                             disabled={isLoading || uploadingFile}
                         />
                         <button
                             onClick={selectedFile ? handleUploadFile : handleSendMessage}
                             disabled={isLoading || uploadingFile || (!input.trim() && !selectedFile)}
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg flex items-center justify-center font-semibold shadow-md transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg flex items-center justify-center font-semibold shadow-md transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            {uploadingFile ? (
-                                <span className="flex items-center">
-                                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                    </svg>
-                                    Uploading...
-                                </span>
-                            ) : isLoading ? (
-                                <span className="flex items-center">
-                                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                    </svg>
-                                    Sending...
-                                </span>
+                            {uploadingFile || isLoading ? (
+                                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
                             ) : (
                                 <>
-                                    <FiSend className="mr-2" />
-                                    Send
+                                    <FiSend className="sm:mr-2" />
+                                    <span className="hidden sm:block">Send</span>
                                 </>
                             )}
                         </button>
