@@ -41,13 +41,13 @@ export default function CourseContainer() {
                     >
                         Schedule
                     </button>
-                    <button
+                    {/* <button
                         onClick={() => setActiveTab('ai')}
                         className={`py-2 sm:py-3 px-2 sm:px-4 rounded-t-lg transition-all duration-200 whitespace-nowrap
                             ${activeTab === 'ai' ? 'border-b-3 border-blue-600 text-blue-600' : 'text-gray-600 hover:text-gray-900'}`}
                     >
                         AI Assistant
-                    </button>
+                    </button> */}
                 </nav>
             </div>
 

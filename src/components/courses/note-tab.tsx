@@ -81,13 +81,14 @@ export default function NotesTab() {
         }
     }, [activeNote]);
 
+    const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        const newContent = e.target.value;
+        setContent(newContent);
+    };
+
     const handleSaveNote = async () => {
         if (!user?.uid || !currentCourse?.id) {
             setMessage({ text: 'Authentication or course data missing. Cannot save note.', type: 'error' });
-            return;
-        }
-        if (!title.trim()) {
-            setMessage({ text: 'Note title is required.', type: 'error' });
             return;
         }
         if (!content.trim()) {
@@ -99,8 +100,10 @@ export default function NotesTab() {
         setMessage(null);
 
         try {
+            const finalTitle = title.trim() || 'Untitled';
+
             const noteData = {
-                title: title.trim(),
+                title: finalTitle,
                 content: content.trim(),
                 courseId: currentCourse.id,
                 userId: user.uid,
@@ -177,7 +180,7 @@ export default function NotesTab() {
     return (
         <div className="flex flex-col md:flex-row gap-6 p-4 h-full">
             {/* Left Column: Note List */}
-            <div className="md:w-1/3 bg-white rounded-xl shadow-lg flex flex-col min-h-[400px] max-h-[calc(100vh-200px)] overflow-hidden">
+            <div className="md:w-1/3 bg-white rounded-xl shadow-lg flex flex-col max-h-[calc(100vh-200px)] overflow-hidden">
                 <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
                     <h3 className="text-xl font-semibold text-gray-800">Your Notes</h3>
                     <button
@@ -225,7 +228,7 @@ export default function NotesTab() {
             </div>
 
             {/* Right Column: Note Viewer/Editor */}
-            <div className="md:w-2/3 bg-white rounded-xl shadow-lg flex flex-col p-6 min-h-[400px] max-h-[calc(100vh-200px)]">
+            <div className="md:w-2/3 bg-white rounded-xl shadow-lg flex flex-col p-6 h-fit">
                 {message && (
                     <div className={`mb-4 p-3 rounded-lg flex items-center space-x-2 text-sm ${message.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                         {message.type === 'success' ? <FiCheckCircle className="flex-shrink-0" /> : <FiXCircle className="flex-shrink-0" />}
@@ -241,19 +244,19 @@ export default function NotesTab() {
                     </div>
                 ) : (
                     <div className="flex-1 flex flex-col">
-                        <div className="flex justify-between items-center mb-4 pb-4 border-b border-gray-200">
+                        <div className="flex flex-wrap justify-between items-center mb-4 pb-4 border-b border-gray-200 gap-2">
                             {isEditing ? (
                                 <input
                                     type="text"
                                     value={title}
                                     onChange={(e) => setTitle(e.target.value)}
                                     placeholder="Note title"
-                                    className="flex-1 text-2xl font-bold text-gray-900 p-2 border-b-2 border-gray-300 focus:border-blue-500 outline-none transition-colors"
+                                    className="flex-1 text-2xl font-bold text-gray-900 p-2 border-b-2 border-gray-300 focus:border-blue-500 outline-none transition-colors min-w-0"
                                 />
                             ) : (
                                 <h3 className="text-2xl font-bold text-gray-900">{activeNote?.title}</h3>
                             )}
-                            <div className="flex space-x-2 ml-4">
+                            <div className="flex space-x-2 ml-auto">
                                 {isEditing ? (
                                     <>
                                         <button
@@ -268,17 +271,17 @@ export default function NotesTab() {
                                                 }
                                                 setMessage(null);
                                             }}
-                                            className="p-2 md:px-4 md:py-2 border border-gray-300 text-gray-700 rounded-lg flex items-center hover:bg-gray-100 transition-colors"
+                                            className="p-2 border border-gray-300 text-gray-700 rounded-lg flex items-center hover:bg-gray-100 transition-colors"
                                             disabled={saving}
                                             title="Cancel"
                                         >
                                             <FiXCircle className="text-lg" />
-                                            <span className="hidden md:inline ml-2">Cancel</span>
+                                            <span className="hidden">Cancel</span>
                                         </button>
                                         <button
                                             onClick={handleSaveNote}
-                                            className="p-2 md:px-4 md:py-2 bg-blue-600 text-white rounded-lg flex items-center hover:bg-blue-700 transition-colors"
-                                            disabled={saving || !title.trim() || !content.trim()}
+                                            className="p-2 bg-blue-600 text-white rounded-lg flex items-center hover:bg-blue-700 transition-colors"
+                                            disabled={saving || !content.trim()}
                                             title={activeNote ? 'Update' : 'Save'}
                                         >
                                             {saving ? (
@@ -286,27 +289,27 @@ export default function NotesTab() {
                                             ) : (
                                                 <FiSave className="text-lg" />
                                             )}
-                                            <span className="hidden md:inline ml-2">{activeNote ? 'Update' : 'Save'}</span>
+                                            <span className="hidden">Save</span>
                                         </button>
                                     </>
                                 ) : (
                                     <>
                                         <button
                                             onClick={() => setIsEditing(true)}
-                                            className="p-2 md:px-4 md:py-2 border border-blue-600 text-blue-600 rounded-lg flex items-center hover:bg-blue-50 transition-colors"
+                                            className="p-2 border border-blue-600 text-blue-600 rounded-lg flex items-center hover:bg-blue-50 transition-colors"
                                             title="Edit"
                                         >
                                             <FiEdit className="text-lg" />
-                                            <span className="hidden md:inline ml-2">Edit</span>
+                                            <span className="hidden">Edit</span>
                                         </button>
                                         <button
                                             onClick={() => activeNote && handleDeleteNote(activeNote.id)}
-                                            className="p-2 md:px-4 md:py-2 border border-red-600 text-red-600 rounded-lg flex items-center hover:bg-red-50 transition-colors"
+                                            className="p-2 border border-red-600 text-red-600 rounded-lg flex items-center hover:bg-red-50 transition-colors"
                                             disabled={saving}
                                             title="Delete"
                                         >
                                             <FiTrash2 className="text-lg" />
-                                            <span className="hidden md:inline ml-2">Delete</span>
+                                            <span className="hidden">Delete</span>
                                         </button>
                                     </>
                                 )}
@@ -316,7 +319,7 @@ export default function NotesTab() {
                         {isEditing ? (
                             <textarea
                                 value={content}
-                                onChange={(e) => setContent(e.target.value)}
+                                onChange={handleContentChange}
                                 placeholder="Write your note here (Markdown supported)"
                                 className="flex-1 w-full text-gray-800 p-4 border border-gray-300 outline-none resize-none rounded-lg font-sans leading-relaxed focus:ring-2 focus:ring-blue-500 transition-colors duration-200"
                             />
