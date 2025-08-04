@@ -324,7 +324,7 @@ export default function NotesTab() {
                                 className="flex-1 w-full text-gray-800 p-4 border border-gray-300 outline-none resize-none rounded-lg font-sans leading-relaxed focus:ring-2 focus:ring-blue-500 transition-colors duration-200"
                             />
                         ) : (
-                            <div className="flex-1 overflow-y-auto p-4 border border-gray-200 rounded-lg bg-gray-50 text-gray-800 prose max-w-none leading-relaxed">
+                            <div className="flex-1 overflow-y-auto border-none rounded-lg bg-transparent text-gray-800 prose max-w-none leading-relaxed">
                                 <ReactMarkdown>{activeNote?.content || 'Select a note to view its content.'}</ReactMarkdown>
                             </div>
                         )}
