@@ -13,6 +13,7 @@
     "@firebase/auth": "^1.11.0",
     "@firebase/firestore": "^4.9.0",
     "@firebase/storage": "^0.14.0",
+    "@tailwindcss/typography": "^0.5.16",
     "firebase": "^12.0.0",
     "firebase-admin": "^13.4.0",
     "marked": "^16.1.1",
@@ -22,6 +23,7 @@
     "react-dom": "19.1.0",
     "react-icons": "^5.5.0",
     "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "sonner": "^2.0.7",
     "uuid": "^11.1.0",
     "zustand": "^5.0.7"

@@ -2,8 +2,9 @@
 /* eslint-disable react/no-unescaped-entities */
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { useStore, Note } from '@/store/useStore'
 import { db } from '@/lib/firebase'
 import { collection, query, where, onSnapshot, doc, updateDoc, deleteDoc, Timestamp, orderBy, setDoc } from 'firebase/firestore'
@@ -20,6 +21,18 @@ export default function NotesTab() {
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
     const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
+    // --- Autosize textarea logic ---
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+    useEffect(() => {
+        if (textareaRef.current) {
+            // Reset height to 'auto' to correctly calculate the new scroll height
+            textareaRef.current.style.height = 'auto';
+            // Set height to the new scroll height
+            textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+        }
+    }, [content, isEditing]);
 
     // --- Real-time Fetching of Notes for Current Course & User ---
     useEffect(() => {
@@ -228,7 +241,7 @@ export default function NotesTab() {
             </div>
 
             {/* Right Column: Note Viewer/Editor */}
-            <div className="md:w-2/3 bg-white rounded-xl flex flex-col px-2 h-fit">
+            <div className="md:w-2/3 bg-white rounded-xl flex flex-col h-fit">
                 {message && (
                     <div className={`mb-4 p-3 rounded-lg flex items-center space-x-2 text-sm ${message.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                         {message.type === 'success' ? <FiCheckCircle className="flex-shrink-0" /> : <FiXCircle className="flex-shrink-0" />}
@@ -318,14 +331,18 @@ export default function NotesTab() {
 
                         {isEditing ? (
                             <textarea
+                                ref={textareaRef}
                                 value={content}
                                 onChange={handleContentChange}
                                 placeholder="Write your note here (Markdown supported)"
                                 className="flex-1 w-full text-gray-800 p-4 border border-gray-300 outline-none resize-none rounded-lg font-sans leading-relaxed focus:ring-2 focus:ring-blue-500 transition-colors duration-200"
+                                style={{ minHeight: '100px' }}
                             />
                         ) : (
                             <div className="flex-1 overflow-y-auto border-none rounded-lg bg-transparent text-gray-800 prose max-w-none leading-relaxed">
-                                <ReactMarkdown>{activeNote?.content || 'Select a note to view its content.'}</ReactMarkdown>
+                                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                    {activeNote?.content || 'Select a note to view its content.'}
+                                </ReactMarkdown>
                             </div>
                         )}
                     </div>
