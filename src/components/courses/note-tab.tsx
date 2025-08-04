@@ -228,7 +228,7 @@ export default function NotesTab() {
             </div>
 
             {/* Right Column: Note Viewer/Editor */}
-            <div className="md:w-2/3 bg-white rounded-xl shadow-lg flex flex-col p-6 h-fit">
+            <div className="md:w-2/3 bg-white rounded-xl flex flex-col px-2 h-fit">
                 {message && (
                     <div className={`mb-4 p-3 rounded-lg flex items-center space-x-2 text-sm ${message.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                         {message.type === 'success' ? <FiCheckCircle className="flex-shrink-0" /> : <FiXCircle className="flex-shrink-0" />}
