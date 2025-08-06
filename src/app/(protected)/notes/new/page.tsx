@@ -1,12 +1,17 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react' // Added useMemo
 import { useRouter } from 'next/navigation'
 import { useStore } from '@/store/useStore'
 import { db } from '@/lib/firebase'
 import { doc, setDoc, serverTimestamp, collection } from 'firebase/firestore'
 import { FiArrowLeft, FiSave, FiCheckCircle, FiXCircle } from 'react-icons/fi'
 import Link from 'next/link'
+
+// Import SimpleMDE editor and its types
+import SimpleMdeReact from 'react-simplemde-editor';
+import 'easymde/dist/easymde.min.css'; // Import the default styles for SimpleMDE
+import EasyMDE from 'easymde'; // Import EasyMDE for static method calls
 
 export default function NewNotePage() {
     const { user, currentCourse, authChecked } = useStore()
@@ -77,6 +82,40 @@ export default function NewNotePage() {
         }
     }
 
+    // SimpleMDE options, memoized to prevent unnecessary re-renders
+    const mdeOptions = useMemo(() => {
+        return {
+            autofocus: true,
+            spellChecker: false,
+            toolbar: [
+                'bold', 'italic', 'heading', '|',
+                'quote', 'unordered-list', 'ordered-list', '|',
+                'link', 'image', // Image button is here, but custom upload logic is needed for direct uploads
+                {
+                    name: "preview",
+                    action: (editor: EasyMDE) => EasyMDE.togglePreview(editor), // Corrected: Call static method
+                    className: "fa fa-eye no-disable",
+                    title: "Toggle Preview"
+                },
+                {
+                    name: "side-by-side",
+                    action: (editor: EasyMDE) => EasyMDE.toggleSideBySide(editor), // Corrected: Call static method
+                    className: "fa fa-columns no-disable no-mobile",
+                    title: "Toggle Side by Side"
+                },
+                {
+                    name: "fullscreen",
+                    action: (editor: EasyMDE) => EasyMDE.toggleFullScreen(editor), // Corrected: Call static method
+                    className: "fa fa-arrows-alt no-disable no-mobile",
+                    title: "Toggle Fullscreen"
+                },
+                '|', // Separator
+                'guide' // Help guide
+            ],
+            status: false,
+        } as EasyMDE.Options;
+    }, []);
+
     return (
         <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
             <div className="max-w-4xl mx-auto">
@@ -121,12 +160,11 @@ export default function NewNotePage() {
 
                     <div className="mb-8">
                         <label htmlFor="note-content" className="block text-sm font-semibold mb-2 text-gray-800">Content *</label>
-                        <textarea
-                            id="note-content"
-                            className="w-full p-3 border resize-none border-gray-300 rounded-lg min-h-[300px] text-gray-900 font-sans placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors duration-200"
+                        <SimpleMdeReact
                             value={note.content}
-                            onChange={(e) => setNote({ ...note, content: e.target.value })}
-                            required
+                            onChange={(value) => setNote({ ...note, content: value })}
+                            options={mdeOptions}
+                            className="w-full text-gray-800 font-sans leading-relaxed"
                         />
                     </div>
 

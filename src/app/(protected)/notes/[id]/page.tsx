@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState, useEffect, useMemo } from 'react' // Added useMemo
 import { useParams, useRouter } from 'next/navigation'
 import { useStore } from '@/store/useStore'
 import { db } from '@/lib/firebase'
@@ -9,6 +9,12 @@ import { doc, getDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp } from 'f
 import { FiArrowLeft, FiEdit, FiTrash2, FiSave, FiX, FiCheckCircle, FiXCircle, FiBookOpen } from 'react-icons/fi'
 import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm' // Import remarkGfm for Markdown rendering
+
+// Import SimpleMDE editor and its types
+import SimpleMdeReact from 'react-simplemde-editor';
+import 'easymde/dist/easymde.min.css'; // Import the default styles for SimpleMDE
+import EasyMDE from 'easymde'; // Import EasyMDE for static method calls
 
 // Define the Note and Course interfaces for type safety
 interface Note {
@@ -90,11 +96,11 @@ export default function NoteDetailPage() {
                     });
                 } else {
                     console.warn('Note not found or user does not have permission.');
-                    router.push('/dashboard/notes');
+                    router.push('/notes'); // Redirect to general notes page
                 }
             } catch (error) {
                 console.error('Error fetching note:', error);
-                router.push('/dashboard/notes');
+                router.push('/notes'); // Redirect on error
             } finally {
                 setLoading(false);
             }
@@ -124,8 +130,7 @@ export default function NoteDetailPage() {
                 ...note,
                 title: editNote.title,
                 content: editNote.content,
-                // We update the local state with a new Date object for immediate UI feedback
-                updatedAt: new Date() as any // Cast to any to satisfy the state's potential Timestamp type
+                updatedAt: new Date() as any // Update local state for immediate feedback
             });
             setIsEditing(false);
             setMessage({ text: 'Note updated successfully!', type: 'success' });
@@ -139,11 +144,11 @@ export default function NoteDetailPage() {
         if (!isOwner || !note) return;
 
         setDeleting(true);
-        setShowDeleteModal(false);
+        setShowDeleteModal(false); // Close modal immediately
         try {
             await deleteDoc(doc(db, 'notes', note.id));
             setMessage({ text: 'Note deleted successfully!', type: 'success' });
-            setTimeout(() => router.push('/dashboard/notes'), 1500);
+            setTimeout(() => router.push('/notes'), 1500); // Redirect after a short delay
         } catch (error) {
             console.error('Error deleting note:', error);
             setMessage({ text: 'Failed to delete note. Please try again.', type: 'error' });
@@ -153,10 +158,44 @@ export default function NoteDetailPage() {
     };
 
     const getCourseTitle = (courseId: string) => {
-        // Find the course from the global store
         const course = courses.find((c: Course) => c.id === courseId);
         return course ? course.title : 'General';
     };
+
+    // SimpleMDE options, memoized
+    const mdeOptions = useMemo(() => {
+        return {
+            autofocus: true,
+            spellChecker: false,
+            toolbar: [
+                'bold', 'italic', 'heading', '|',
+                'quote', 'unordered-list', 'ordered-list', '|',
+                'link', 'image',
+                {
+                    name: "preview",
+                    action: (editor: EasyMDE) => EasyMDE.togglePreview(editor),
+                    className: "fa fa-eye no-disable",
+                    title: "Toggle Preview"
+                },
+                {
+                    name: "side-by-side",
+                    action: (editor: EasyMDE) => EasyMDE.toggleSideBySide(editor),
+                    className: "fa fa-columns no-disable no-mobile",
+                    title: "Toggle Side by Side"
+                },
+                {
+                    name: "fullscreen",
+                    action: (editor: EasyMDE) => EasyMDE.toggleFullScreen(editor),
+                    className: "fa fa-arrows-alt no-disable no-mobile",
+                    title: "Toggle Fullscreen"
+                },
+                '|',
+                'guide'
+            ],
+            status: false,
+        } as EasyMDE.Options;
+    }, []);
+
 
     if (loading) {
         return (
@@ -173,7 +212,7 @@ export default function NoteDetailPage() {
                     <FiXCircle className="text-5xl text-red-400" />
                 </div>
                 <h3 className="text-xl font-medium text-gray-900">Note not found or you do not have access.</h3>
-                <Link href="/dashboard/notes" className="mt-4 inline-block text-blue-600 hover:underline">
+                <Link href="/notes" className="mt-4 inline-block text-blue-600 hover:underline">
                     <FiArrowLeft className="inline-block mr-2" />
                     Back to notes
                 </Link>
@@ -185,14 +224,14 @@ export default function NoteDetailPage() {
     const getDisplayDate = (date: Date | Timestamp | null) => {
         if (!date) return 'N/A';
         if (date instanceof Timestamp) {
-            return date.toDate().toLocaleDateString();
+            return date.toDate().toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
         }
-        return date.toLocaleDateString();
+        return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
     };
 
     return (
         <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8 font-sans">
-            <div className="max-w-4xl mx-auto">
+            <div className="max-w-4xl mx-auto bg-white rounded-2xl shadow-xl p-6 sm:p-8">
                 <div className="flex flex-col sm:flex-row justify-between items-center mb-6 space-y-4 sm:space-y-0">
                     <Link
                         href="/notes"
@@ -227,7 +266,8 @@ export default function NoteDetailPage() {
                                     <button
                                         onClick={() => {
                                             setIsEditing(false);
-                                            setEditNote({ title: note.title, content: note.content });
+                                            setEditNote({ title: note.title, content: note.content }); // Revert changes
+                                            setMessage(null);
                                         }}
                                         className="flex items-center px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-semibold transition-all duration-200"
                                     >
@@ -255,7 +295,7 @@ export default function NoteDetailPage() {
                 )}
 
                 {isEditing ? (
-                    <div className="bg-white rounded-2xl shadow-xl p-6 sm:p-8">
+                    <div>
                         <div className="mb-6">
                             <label htmlFor="note-title" className="block text-sm font-semibold mb-2 text-gray-800">Title</label>
                             <input
@@ -269,17 +309,17 @@ export default function NoteDetailPage() {
 
                         <div className="mb-6">
                             <label htmlFor="note-content" className="block text-sm font-semibold mb-2 text-gray-800">Content</label>
-                            <textarea
-                                id="note-content"
-                                className="w-full p-3 border resize-none border-gray-300 rounded-lg min-h-[300px] text-gray-900 font-sans focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors duration-200"
+                            <SimpleMdeReact
                                 value={editNote.content}
-                                onChange={(e) => setEditNote({ ...editNote, content: e.target.value })}
+                                onChange={(value) => setEditNote({ ...editNote, content: value })}
+                                options={mdeOptions}
+                                className="w-full text-gray-800 font-sans leading-relaxed"
                             />
                         </div>
                     </div>
                 ) : (
-                    <div className="bg-white rounded-2xl shadow-xl p-6 sm:p-8">
-                        <h1 className="text-2xl font-bold text-gray-900 mb-2">{note.title}</h1>
+                    <div>
+                        <h1 className="text-3xl font-bold text-gray-900 mb-2">{note.title}</h1>
 
                         <div className="flex flex-col sm:flex-row sm:items-center text-sm text-gray-500 mb-6 space-y-2 sm:space-y-0 sm:space-x-4">
                             <span>Created: {getDisplayDate(note.createdAt)}</span>
@@ -293,7 +333,7 @@ export default function NoteDetailPage() {
                         </div>
 
                         <div className="prose max-w-none text-gray-800 leading-relaxed">
-                            <ReactMarkdown>{note.content}</ReactMarkdown>
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{note.content}</ReactMarkdown>
                         </div>
                     </div>
                 )}
@@ -327,4 +367,3 @@ export default function NoteDetailPage() {
         </div>
     );
 }
-

@@ -117,7 +117,7 @@ export default function SchedulePage() {
                         Month View
                     </button>
                     <Link
-                        href="/dashboard/schedule/new"
+                        href="/schedule/new"
                         className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center shadow-md transition-all duration-200 text-sm font-medium"
                     >
                         <FiPlus className="mr-2" />

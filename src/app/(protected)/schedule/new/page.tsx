@@ -39,11 +39,11 @@ export default function NewSchedulePage() {
     // --- DEBUG LOG: On component mount/updates ---
     useEffect(() => {
         console.log("NewSchedulePage Component Mounted/Updated:");
-        console.log("  - user object (from Zustand):", user);
-        console.log("  - user.uid (from Zustand):", user?.uid);
-        console.log("  - authChecked (from Zustand):", authChecked);
-        console.log("  - currentCourse (from Zustand):", currentCourse);
-        console.log("  - schedule state:", schedule);
+        console.log("   - user object (from Zustand):", user);
+        console.log("   - user.uid (from Zustand):", user?.uid);
+        console.log("   - authChecked (from Zustand):", authChecked);
+        console.log("   - currentCourse (from Zustand):", currentCourse);
+        console.log("   - schedule state:", schedule);
 
         // --- NEW DEBUG LOG: Button disabled conditions ---
         const isTitleEmpty = !schedule.title.trim();
@@ -51,19 +51,15 @@ export default function NewSchedulePage() {
         const isStartTimeEmpty = !schedule.startTime;
         const isEndTimeEmpty = !schedule.endTime;
         const isUserMissing = !user?.uid;
-        // Removed: isCourseMissing = !currentCourse?.id; // No longer a blocking condition for saving
 
         console.log("Button Disabled Conditions Check:");
-        console.log(`  - Title Empty: ${isTitleEmpty} (Value: '${schedule.title}')`);
-        console.log(`  - Type Empty: ${isTypeEmpty} (Value: '${schedule.type}')`);
-        console.log(`  - Start Time Empty: ${isStartTimeEmpty} (Value: '${schedule.startTime}')`);
-        console.log(`  - End Time Empty: ${isEndTimeEmpty} (Value: '${schedule.endTime}')`);
-        console.log(`  - Saving: ${saving}`);
-        console.log(`  - User Missing: ${isUserMissing} (User UID: ${user?.uid})`);
-        // console.log(`  - Course Missing: ${isCourseMissing} (Course ID: ${currentCourse?.id})`); // Removed
-        console.log(`  - Overall Disabled: ${isTitleEmpty || isTypeEmpty || isStartTimeEmpty || isEndTimeEmpty || saving || isUserMissing}`); // Updated overall condition
-        // --- END NEW DEBUG LOG ---
-
+        console.log(`   - Title Empty: ${isTitleEmpty} (Value: '${schedule.title}')`);
+        console.log(`   - Type Empty: ${isTypeEmpty} (Value: '${schedule.type}')`);
+        console.log(`   - Start Time Empty: ${isStartTimeEmpty} (Value: '${schedule.startTime}')`);
+        console.log(`   - End Time Empty: ${isEndTimeEmpty} (Value: '${schedule.endTime}')`);
+        console.log(`   - Saving: ${saving}`);
+        console.log(`   - User Missing: ${isUserMissing} (User UID: ${user?.uid})`);
+        console.log(`   - Overall Disabled: ${isTitleEmpty || isTypeEmpty || isStartTimeEmpty || isEndTimeEmpty || saving || isUserMissing}`);
     }, [user, authChecked, currentCourse, schedule, saving]);
 
     const handleSave = async () => {
@@ -87,7 +83,6 @@ export default function NewSchedulePage() {
             console.error("handleSave: Aborting save - user.uid is missing.");
             return;
         }
-        // Removed: if (!currentCourse?.id) check
         if (
             !schedule.title.trim() ||
             !schedule.type ||
@@ -145,17 +140,19 @@ export default function NewSchedulePage() {
     return (
         <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
             <div className="max-w-4xl mx-auto">
-                <div className="mb-6 flex justify-between items-center">
+                {/* Header Section */}
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6">
                     <Link
                         href={currentCourse ? `/courses/${currentCourse.id}` : '/dashboard'}
-                        className="flex items-center text-blue-600 hover:underline text-lg font-medium"
+                        className="flex items-center text-blue-600 hover:underline text-lg font-medium mb-4 sm:mb-0"
                     >
                         <FiArrowLeft className="mr-2 text-xl" />
                         Back to {currentCourse ? currentCourse.title : 'Dashboard'}
                     </Link>
-                    <h1 className="text-3xl font-extrabold text-gray-900">Add New Schedule</h1>
+                    <h1 className="text-3xl font-extrabold text-gray-900 text-left sm:text-right">Add New Schedule</h1>
                 </div>
 
+                {/* Message Display */}
                 {message && (
                     <div className={`mb-6 p-4 rounded-lg flex items-center space-x-2 ${message.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                         {message.type === 'success' ? <FiCheckCircle /> : <FiXCircle />}
@@ -163,8 +160,8 @@ export default function NewSchedulePage() {
                     </div>
                 )}
 
-                {/* Display current course if selected, otherwise indicate general schedule */}
-                <div className="bg-blue-50 rounded-lg p-4 mb-6 shadow-sm">
+                {/* Current Course Info Block */}
+                <div className="bg-blue-50 rounded-xl p-4 mb-8 shadow-sm">
                     <p className="text-blue-800 text-base">
                         {currentCourse ? (
                             <>Schedule for: <span className="font-semibold">{currentCourse.title} ({currentCourse.code})</span></>
@@ -174,13 +171,14 @@ export default function NewSchedulePage() {
                     </p>
                 </div>
 
-                <div className="bg-white rounded-2xl shadow-md p-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                {/* Schedule Form */}
+                <div className="bg-white rounded-2xl shadow-lg p-6 sm:p-8">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                         <div>
-                            <label className="block text-sm font-medium mb-1 text-gray-800">Title *</label>
+                            <label className="block text-sm font-medium mb-1 text-gray-800">Title <span className="text-red-500">*</span></label>
                             <input
                                 type="text"
-                                className="w-full p-3 border border-gray-300 outline-none text-gray-800 rounded-lg focus:ring-2 focus:ring-blue-500 transition-colors duration-200"
+                                className="w-full p-3 border border-gray-300 outline-none text-gray-800 rounded-xl focus:ring-2 focus:ring-blue-500 transition-colors duration-200"
                                 value={schedule.title}
                                 onChange={(e) => setSchedule({ ...schedule, title: e.target.value })}
                                 placeholder="e.g. Lecture on Networking"
@@ -189,11 +187,11 @@ export default function NewSchedulePage() {
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium mb-1 text-gray-800">Type *</label>
+                            <label className="block text-sm font-medium mb-1 text-gray-800">Type <span className="text-red-500">*</span></label>
                             <select
                                 value={schedule.type}
                                 onChange={(e) => setSchedule({ ...schedule, type: e.target.value as Schedule['type'] })}
-                                className="w-full p-3 border rounded-lg border-gray-300 outline-none text-gray-800 focus:ring-2 focus:ring-blue-500 transition-colors duration-200 bg-white"
+                                className="w-full p-3 border rounded-xl border-gray-300 outline-none text-gray-800 focus:ring-2 focus:ring-blue-500 transition-colors duration-200 bg-white"
                                 required
                             >
                                 {SCHEDULE_TYPES.map((type) => (
@@ -203,11 +201,11 @@ export default function NewSchedulePage() {
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium mb-1 text-gray-800">Day *</label>
+                            <label className="block text-sm font-medium mb-1 text-gray-800">Day <span className="text-red-500">*</span></label>
                             <select
                                 value={schedule.day}
                                 onChange={(e) => setSchedule({ ...schedule, day: e.target.value })}
-                                className="w-full p-3 border rounded-lg border-gray-300 outline-none text-gray-800 focus:ring-2 focus:ring-blue-500 transition-colors duration-200 bg-white"
+                                className="w-full p-3 border rounded-xl border-gray-300 outline-none text-gray-800 focus:ring-2 focus:ring-blue-500 transition-colors duration-200 bg-white"
                                 required
                             >
                                 {DAYS_OF_WEEK.map(day => (
@@ -217,10 +215,21 @@ export default function NewSchedulePage() {
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium mb-1 text-gray-800">Start Time *</label>
+                            <label className="block text-sm font-medium mb-1 text-gray-800">Location</label>
+                            <input
+                                type="text"
+                                className="w-full p-3 border border-gray-300 outline-none text-gray-800 rounded-xl focus:ring-2 focus:ring-blue-500 transition-colors duration-200"
+                                value={schedule.location}
+                                onChange={(e) => setSchedule({ ...schedule, location: e.target.value })}
+                                placeholder="Room 101 or Online"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium mb-1 text-gray-800">Start Time <span className="text-red-500">*</span></label>
                             <input
                                 type="time"
-                                className="w-full p-3 border border-gray-300 outline-none text-gray-800 rounded-lg focus:ring-2 focus:ring-blue-500 transition-colors duration-200"
+                                className="w-full p-3 border border-gray-300 outline-none text-gray-800 rounded-xl focus:ring-2 focus:ring-blue-500 transition-colors duration-200"
                                 value={schedule.startTime}
                                 onChange={(e) => setSchedule({ ...schedule, startTime: e.target.value })}
                                 required
@@ -228,39 +237,30 @@ export default function NewSchedulePage() {
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-gray-800 mb-1">End Time *</label>
+                            <label className="block text-sm font-medium text-gray-800 mb-1">End Time <span className="text-red-500">*</span></label>
                             <input
                                 type="time"
-                                className="w-full p-3 border-gray-300 outline-none border text-gray-800 rounded-lg focus:ring-2 focus:ring-blue-500 transition-colors duration-200"
+                                className="w-full p-3 border-gray-300 outline-none border text-gray-800 rounded-xl focus:ring-2 focus:ring-blue-500 transition-colors duration-200"
                                 value={schedule.endTime}
                                 onChange={(e) => setSchedule({ ...schedule, endTime: e.target.value })}
                                 required
                             />
                         </div>
-
-                        <div>
-                            <label className="block text-sm text-gray-800 font-medium mb-1">Location</label>
-                            <input
-                                type="text"
-                                className="w-full p-3 border border-gray-300 outline-none text-gray-800 rounded-lg focus:ring-2 focus:ring-blue-500 transition-colors duration-200"
-                                value={schedule.location}
-                                onChange={(e) => setSchedule({ ...schedule, location: e.target.value })}
-                                placeholder="Room 101 or Online"
-                            />
-                        </div>
                     </div>
 
-                    <div className="flex items-center mb-6">
-                        <input
-                            id="recurring"
-                            type="checkbox"
-                            checked={schedule.recurring}
-                            onChange={(e) => setSchedule({ ...schedule, recurring: e.target.checked })}
-                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                        />
-                        <label htmlFor="recurring" className="ml-2 block text-sm text-gray-700">
-                            Recurring weekly
-                        </label>
+                    <div className="flex items-center justify-between mb-8">
+                        <div className="flex items-center">
+                            <input
+                                id="recurring"
+                                type="checkbox"
+                                checked={schedule.recurring}
+                                onChange={(e) => setSchedule({ ...schedule, recurring: e.target.checked })}
+                                className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                            />
+                            <label htmlFor="recurring" className="ml-3 block text-base text-gray-700">
+                                Recurring weekly
+                            </label>
+                        </div>
                     </div>
 
                     <div className="flex justify-end">
@@ -275,7 +275,7 @@ export default function NewSchedulePage() {
                                 saving ||
                                 !user?.uid
                             }
-                            className="bg-blue-600 text-white px-6 py-3 rounded-xl flex items-center justify-center font-semibold text-lg transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+                            className="w-full sm:w-auto bg-blue-600 text-white px-8 py-3 rounded-xl flex items-center justify-center font-semibold text-lg transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
                         >
                             {saving ? (
                                 <span className="flex items-center">

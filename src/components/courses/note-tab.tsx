@@ -2,7 +2,7 @@
 /* eslint-disable react/no-unescaped-entities */
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useStore, Note } from '@/store/useStore'
@@ -10,6 +10,11 @@ import { db } from '@/lib/firebase'
 import { collection, query, where, onSnapshot, doc, updateDoc, deleteDoc, Timestamp, orderBy, setDoc } from 'firebase/firestore'
 import { FiPlus, FiEdit, FiTrash2, FiSave, FiXCircle, FiFileText, FiCheckCircle } from 'react-icons/fi'
 import LoadingSpinner from '@/components/ui/loading-spinner'
+
+// Import SimpleMDE editor and its types
+import SimpleMdeReact from 'react-simplemde-editor';
+import 'easymde/dist/easymde.min.css'; // Import the default styles for SimpleMDE
+import EasyMDE from 'easymde'; // Import EasyMDE types for better type safety
 
 export default function NotesTab() {
     const { user, currentCourse, authChecked } = useStore()
@@ -21,18 +26,6 @@ export default function NotesTab() {
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
     const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
-
-    // --- Autosize textarea logic ---
-    const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-    useEffect(() => {
-        if (textareaRef.current) {
-            // Reset height to 'auto' to correctly calculate the new scroll height
-            textareaRef.current.style.height = 'auto';
-            // Set height to the new scroll height
-            textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
-        }
-    }, [content, isEditing]);
 
     // --- Real-time Fetching of Notes for Current Course & User ---
     useEffect(() => {
@@ -73,7 +66,15 @@ export default function NotesTab() {
             if (!activeNote && fetchedNotes.length > 0 && !isEditing) {
                 setActiveNote(fetchedNotes[0]);
             }
-
+            if (activeNote) {
+                const currentActive = fetchedNotes.find(n => n.id === activeNote.id);
+                if (currentActive && (currentActive.title !== title || currentActive.content !== content)) {
+                    if (!isEditing) {
+                        setTitle(currentActive.title);
+                        setContent(currentActive.content);
+                    }
+                }
+            }
         }, (error) => {
             console.error("Error fetching notes:", error);
             setMessage({ text: 'Failed to load notes.', type: 'error' });
@@ -81,23 +82,21 @@ export default function NotesTab() {
         });
 
         return () => unsubscribe();
-    }, [authChecked, user?.uid, currentCourse?.id, activeNote, isEditing]);
+    }, [authChecked, user?.uid, currentCourse?.id, activeNote, isEditing, title, content]);
 
-    // Update form fields when active note changes
+    // Update form fields when active note changes (only when not editing)
     useEffect(() => {
-        if (activeNote) {
-            setTitle(activeNote.title);
-            setContent(activeNote.content);
-        } else {
-            setTitle('');
-            setContent('');
+        if (!isEditing) {
+            if (activeNote) {
+                setTitle(activeNote.title);
+                setContent(activeNote.content);
+            } else {
+                setTitle('');
+                setContent('');
+            }
         }
-    }, [activeNote]);
+    }, [activeNote, isEditing]);
 
-    const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-        const newContent = e.target.value;
-        setContent(newContent);
-    };
 
     const handleSaveNote = async () => {
         if (!user?.uid || !currentCourse?.id) {
@@ -174,6 +173,40 @@ export default function NotesTab() {
         setMessage(null);
     };
 
+    // Use useMemo to memoize options to prevent unnecessary re-renders of SimpleMdeReact
+    const mdeOptions = useMemo(() => {
+        return {
+            autofocus: true,
+            spellChecker: false,
+            toolbar: [
+                'bold', 'italic', 'heading', '|',
+                'quote', 'unordered-list', 'ordered-list', '|',
+                'link', 'image', // Image button is here, but custom upload logic is needed for direct uploads
+                {
+                    name: "preview",
+                    action: (editor: EasyMDE) => EasyMDE.togglePreview(editor), // Corrected: Call static method
+                    className: "fa fa-eye no-disable",
+                    title: "Toggle Preview"
+                },
+                {
+                    name: "side-by-side",
+                    action: (editor: EasyMDE) => EasyMDE.toggleSideBySide(editor), // Corrected: Call static method
+                    className: "fa fa-columns no-disable no-mobile",
+                    title: "Toggle Side by Side"
+                },
+                {
+                    name: "fullscreen",
+                    action: (editor: EasyMDE) => EasyMDE.toggleFullScreen(editor), // Corrected: Call static method
+                    className: "fa fa-arrows-alt no-disable no-mobile",
+                    title: "Toggle Fullscreen"
+                },
+                '|', // Separator
+                'guide' // Help guide
+            ],
+            status: false,
+        } as EasyMDE.Options;
+    }, []);
+
     if (!currentCourse) {
         return (
             <div className="flex justify-center items-center p-8 text-gray-500 min-h-[500px]">
@@ -241,7 +274,7 @@ export default function NotesTab() {
             </div>
 
             {/* Right Column: Note Viewer/Editor */}
-            <div className="md:w-2/3 bg-white rounded-xl flex flex-col h-fit">
+            <div className="md:w-2/3 bg-white rounded-xl shadow-lg flex flex-col h-fit min-h-[500px]">
                 {message && (
                     <div className={`mb-4 p-3 rounded-lg flex items-center space-x-2 text-sm ${message.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                         {message.type === 'success' ? <FiCheckCircle className="flex-shrink-0" /> : <FiXCircle className="flex-shrink-0" />}
@@ -256,8 +289,8 @@ export default function NotesTab() {
                         <p className="text-sm mt-2">Your notes will appear here.</p>
                     </div>
                 ) : (
-                    <div className="flex-1 flex flex-col">
-                        <div className="flex flex-wrap justify-between items-center mb-4 pb-4 gap-2">
+                    <div className="flex-1 flex flex-col p-4">
+                        <div className="flex flex-wrap justify-between items-center mb-4 pb-4 gap-2 border-b border-gray-200">
                             {isEditing ? (
                                 <input
                                     type="text"
@@ -289,11 +322,11 @@ export default function NotesTab() {
                                             title="Cancel"
                                         >
                                             <FiXCircle className="text-lg" />
-                                            <span className="hidden">Cancel</span>
+                                            <span className="hidden sm:inline ml-1">Cancel</span>
                                         </button>
                                         <button
                                             onClick={handleSaveNote}
-                                            className="p-2 bg-blue-600 text-white rounded-lg flex items-center hover:bg-blue-700 transition-colors"
+                                            className="p-2 bg-blue-600 text-white rounded-lg flex items-center hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                             disabled={saving || !content.trim()}
                                             title={activeNote ? 'Update' : 'Save'}
                                         >
@@ -302,7 +335,7 @@ export default function NotesTab() {
                                             ) : (
                                                 <FiSave className="text-lg" />
                                             )}
-                                            <span className="hidden">Save</span>
+                                            <span className="hidden sm:inline ml-1">{activeNote ? 'Update' : 'Save'}</span>
                                         </button>
                                     </>
                                 ) : (
@@ -313,7 +346,7 @@ export default function NotesTab() {
                                             title="Edit"
                                         >
                                             <FiEdit className="text-lg" />
-                                            <span className="hidden">Edit</span>
+                                            <span className="hidden sm:inline ml-1">Edit</span>
                                         </button>
                                         <button
                                             onClick={() => activeNote && handleDeleteNote(activeNote.id)}
@@ -322,7 +355,7 @@ export default function NotesTab() {
                                             title="Delete"
                                         >
                                             <FiTrash2 className="text-lg" />
-                                            <span className="hidden">Delete</span>
+                                            <span className="hidden sm:inline ml-1">Delete</span>
                                         </button>
                                     </>
                                 )}
@@ -330,16 +363,14 @@ export default function NotesTab() {
                         </div>
 
                         {isEditing ? (
-                            <textarea
-                                ref={textareaRef}
+                            <SimpleMdeReact
                                 value={content}
-                                onChange={handleContentChange}
-                                placeholder="Write your note here (Markdown supported)"
-                                className="flex-1 w-full text-gray-800 p-4 border border-gray-300 outline-none resize-none rounded-lg font-sans leading-relaxed focus:ring-2 focus:ring-blue-500 transition-colors duration-200"
-                                style={{ minHeight: '100px' }}
+                                onChange={setContent}
+                                options={mdeOptions}
+                                className="flex-1 w-full text-gray-800 font-sans leading-relaxed"
                             />
                         ) : (
-                            <div className="flex-1 overflow-y-auto border-none rounded-lg bg-transparent text-gray-800 prose max-w-none leading-relaxed">
+                            <div className="flex-1 overflow-y-auto p-4 prose max-w-none leading-relaxed">
                                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
                                     {activeNote?.content || 'Select a note to view its content.'}
                                 </ReactMarkdown>

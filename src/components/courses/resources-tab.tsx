@@ -3,13 +3,12 @@
 
 import { useEffect, useState } from 'react'
 import { useStore, Course } from '@/store/useStore'
-import { db, storage } from '@/lib/firebase'
+import { db } from '@/lib/firebase'
 import { doc, updateDoc, onSnapshot } from 'firebase/firestore'
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { FiUploadCloud, FiFileText, FiDownload, FiExternalLink, FiFile, FiCheckCircle, FiXCircle, FiFilePlus } from 'react-icons/fi'
+import { FiUploadCloud, FiFileText, FiDownload, FiExternalLink, FiFile, FiCheckCircle, FiXCircle, FiFilePlus, FiX } from 'react-icons/fi'
 import LoadingSpinner from '@/components/ui/loading-spinner'
-import { v4 as uuidv4 } from 'uuid';
 import Link from 'next/link'
+import axios from 'axios'
 
 // Helper function to get icon based on file type
 const getFileIcon = (mimeType?: string) => {
@@ -17,26 +16,40 @@ const getFileIcon = (mimeType?: string) => {
     if (mimeType.includes('pdf')) return <FiFile className="text-red-500" />;
     if (mimeType.includes('word') || mimeType.includes('document')) return <FiFileText className="text-blue-700" />;
     if (mimeType.includes('image')) return <FiFilePlus className="text-green-500" />;
+    if (mimeType.includes('presentation')) return <FiFileText className="text-orange-500" />; // For PPTX
+    if (mimeType.includes('spreadsheet')) return <FiFileText className="text-green-700" />; // For XLSX
+    if (mimeType.includes('zip')) return <FiFile className="text-purple-500" />;
     return <FiFile className="text-gray-500" />;
 };
 
 const formatFileSize = (sizeInBytes?: number) => {
-    if (sizeInBytes === undefined) return 'N/A';
+    if (sizeInBytes === undefined || sizeInBytes === null) return 'N/A';
     const sizeInMB = sizeInBytes / (1024 * 1024);
     return `${sizeInMB.toFixed(2)} MB`;
 };
+
+// Define the type for a material resource, including the new viewUrl
+interface MaterialResource {
+    name: string;
+    url: string; // Original URL (for download)
+    viewUrl?: string; // URL for in-browser viewing (e.g., PDF version)
+    type?: string;
+    size?: number;
+}
 
 export default function ResourcesTab() {
     const { user, currentCourse, authChecked } = useStore();
     const [file, setFile] = useState<File | null>(null);
     const [uploading, setUploading] = useState(false);
-    const [courseResources, setCourseResources] = useState<{ name: string; url: string; type?: string; size?: number; }[]>([]);
+    const [courseResources, setCourseResources] = useState<MaterialResource[]>([]);
     const [loadingResources, setLoadingResources] = useState(true);
     const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+    const [viewingResource, setViewingResource] = useState<MaterialResource | null>(null);
 
     const canUpload = user && currentCourse && user.uid === currentCourse.userId;
 
     useEffect(() => {
+        console.log('Frontend: useEffect triggered for resource loading. AuthChecked:', authChecked, 'CurrentCourse ID:', currentCourse?.id);
         if (!authChecked || !currentCourse?.id) {
             setLoadingResources(false);
             setCourseResources([]);
@@ -49,6 +62,7 @@ export default function ResourcesTab() {
         const unsubscribe = onSnapshot(courseDocRef, (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data() as Course;
+                console.log('Frontend: Firestore snapshot received. Materials:', data.materials);
                 setCourseResources(data.materials || []);
                 useStore.setState(state => ({
                     currentCourse: {
@@ -57,11 +71,12 @@ export default function ResourcesTab() {
                     }
                 }));
             } else {
+                console.log('Frontend: Firestore snapshot - course document does not exist.');
                 setCourseResources([]);
             }
             setLoadingResources(false);
         }, (error) => {
-            console.error("Error fetching course resources:", error);
+            console.error("Frontend: Error fetching course resources from Firestore:", error);
             setMessage({ text: 'Failed to load course resources.', type: 'error' });
             setLoadingResources(false);
         });
@@ -71,45 +86,55 @@ export default function ResourcesTab() {
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
-            setFile(e.target.files[0]);
-            setMessage(null);
+            const MAX_FILE_SIZE_MB = 10;
+            if (e.target.files[0].size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+                setMessage({ text: `File size exceeds ${MAX_FILE_SIZE_MB}MB limit.`, type: 'error' });
+                setFile(null);
+            } else {
+                setFile(e.target.files[0]);
+                setMessage(null);
+                console.log('Frontend: File selected for upload:', e.target.files[0].name, 'Type:', e.target.files[0].type);
+            }
         }
     };
 
-    const uploadFileToStorage = async (fileToUpload: File): Promise<{ name: string; url: string; type: string; size: number } | null> => {
-        if (!user || !currentCourse) {
-            setMessage({ text: 'User or Course not available for upload.', type: 'error' });
-            return null;
-        }
-
+    const uploadFileToCloudinary = async (fileToUpload: File): Promise<MaterialResource | null> => {
+        console.log('Frontend: Calling /api/upload-material...');
         try {
-            const fileExtension = fileToUpload.name.split('.').pop();
-            const uniqueFileName = `${uuidv4()}.${fileExtension}`;
-            const storageRef = ref(storage, `course-materials/${currentCourse.id}/${uniqueFileName}`);
+            const formData = new FormData();
+            formData.append('file', fileToUpload);
 
-            console.log(`Uploading file: ${fileToUpload.name} to ${storageRef.fullPath}`);
-            const snapshot = await uploadBytes(storageRef, fileToUpload);
-            const downloadURL = await getDownloadURL(snapshot.ref);
-            console.log(`File uploaded: ${fileToUpload.name}, URL: ${downloadURL}`);
+            const response = await axios.post('/api/upload-material', formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                },
+            });
+
+            const { secure_url, view_url, resource_type, bytes } = response.data;
+            console.log('Frontend: API Response for Cloudinary upload:', { secure_url, view_url, resource_type, bytes });
 
             return {
                 name: fileToUpload.name,
-                url: downloadURL,
-                type: fileToUpload.type,
-                size: fileToUpload.size,
+                url: secure_url,
+                viewUrl: view_url,
+                type: fileToUpload.type || resource_type,
+                size: fileToUpload.size || bytes,
             };
         } catch (error: unknown) {
-            console.error('Error during file upload:', error);
-            if (error instanceof Error) {
-                setMessage({ text: `Upload failed for ${fileToUpload.name}: ${error.message}`, type: 'error' });
+            console.error('Frontend: Cloudinary upload failed:', error);
+            if (axios.isAxiosError(error) && error.response) {
+                setMessage({ text: `Upload failed: ${error.response.data.error || 'Server error'}`, type: 'error' });
+            } else if (error instanceof Error) {
+                setMessage({ text: `Upload failed: ${error.message}`, type: 'error' });
             } else {
-                setMessage({ text: `An unknown error occurred during upload for ${fileToUpload.name}.`, type: 'error' });
+                setMessage({ text: 'An unknown error occurred during upload.', type: 'error' });
             }
             return null;
         }
     };
 
     const handleUpload = async () => {
+        console.log('Frontend: handleUpload triggered.');
         if (!file || !user || !currentCourse) {
             setMessage({ text: 'Please select a file to upload.', type: 'error' });
             return;
@@ -124,9 +149,10 @@ export default function ResourcesTab() {
         setMessage(null);
 
         try {
-            const uploadedMaterial = await uploadFileToStorage(file);
+            const uploadedMaterial = await uploadFileToCloudinary(file);
 
             if (uploadedMaterial) {
+                console.log('Frontend: Uploaded material ready for Firestore:', uploadedMaterial);
                 const courseDocRef = doc(db, 'courses', currentCourse.id);
                 const currentMaterials = currentCourse.materials || [];
                 const updatedMaterials = [...currentMaterials, uploadedMaterial];
@@ -137,9 +163,12 @@ export default function ResourcesTab() {
 
                 setMessage({ text: `File "${file.name}" uploaded and added to course resources!`, type: 'success' });
                 setFile(null);
+                console.log('Frontend: Firestore updated successfully.');
+            } else {
+                console.log('Frontend: Uploaded material is null, not updating Firestore.');
             }
         } catch (error: unknown) {
-            console.error('Error updating course document with new material:', error);
+            console.error('Frontend: Error updating course document with new material:', error);
             if (error instanceof Error) {
                 setMessage({ text: `Failed to save resource to course: ${error.message}`, type: 'error' });
             } else {
@@ -147,7 +176,18 @@ export default function ResourcesTab() {
             }
         } finally {
             setUploading(false);
+            console.log('Frontend: Upload process finished.');
         }
+    };
+
+    const handleViewMaterial = (resource: MaterialResource) => {
+        console.log('Frontend: Viewing resource:', resource);
+        setViewingResource(resource);
+    };
+
+    const handleCloseViewer = () => {
+        console.log('Frontend: Closing viewer.');
+        setViewingResource(null);
     };
 
     if (!currentCourse) {
@@ -247,15 +287,13 @@ export default function ResourcesTab() {
                                     >
                                         <FiDownload className="text-xl" />
                                     </Link>
-                                    <Link
-                                        href={resource.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
+                                    <button
+                                        onClick={() => handleViewMaterial(resource)}
                                         className="p-2 text-gray-500 hover:text-gray-700 transition-colors duration-200 rounded-full hover:bg-gray-100"
                                         title="View Material"
                                     >
                                         <FiExternalLink className="text-xl" />
-                                    </Link>
+                                    </button>
                                 </div>
                             </li>
                         ))}
@@ -270,6 +308,37 @@ export default function ResourcesTab() {
                     </div>
                 )}
             </div>
+
+            {/* Material Viewer Modal */}
+            {viewingResource && (
+                <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl h-full max-h-[90vh] flex flex-col overflow-hidden">
+                        <div className="flex justify-between items-center p-4 border-b border-gray-200">
+                            <h3 className="text-xl font-semibold text-gray-800 truncate">
+                                Viewing: {viewingResource.name}
+                            </h3>
+                            <button
+                                onClick={handleCloseViewer}
+                                className="p-2 rounded-full hover:bg-gray-100 text-gray-600 hover:text-gray-900 transition-colors"
+                                title="Close Viewer"
+                            >
+                                <FiX className="text-2xl" />
+                            </button>
+                        </div>
+                        <div className="flex-1 p-2">
+                            {/* Use viewUrl for the iframe source */}
+                            <iframe
+                                src={viewingResource.viewUrl || viewingResource.url} // Prefer viewUrl, fallback to original
+                                title={viewingResource.name}
+                                className="w-full h-full border-0 rounded-lg"
+                                allowFullScreen
+                            >
+                                <p>Your browser does not support iframes. You can <a href={viewingResource.url} target="_blank" rel="noopener noreferrer">download the file</a> instead.</p>
+                            </iframe>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

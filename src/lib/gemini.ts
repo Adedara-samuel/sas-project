@@ -15,7 +15,7 @@ interface GeminiChatMessage {
  * @param history Optional: Array of previous messages for conversational context.
  * @returns The AI's generated text response.
  */
-export async function getAIResponse(userPrompt: string, context: string, history: ChatMessage[] = []): Promise<string> {
+export async function getAIResponse(userPrompt: string, context: string, history: ChatMessage[] = [], aiImageData?: undefined): Promise<string> {
     const apiKey = "AIzaSyBPwTHb2ux_V2o9twLgnhjhwJKroucdGOk";
 
     if (!apiKey) {

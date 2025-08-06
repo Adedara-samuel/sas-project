@@ -23,7 +23,7 @@ export default function RecentNotes() {
         const q = query(
             collection(db, 'notes'),
             where('userId', '==', user.uid),
-            orderBy('updatedAt', 'desc')
+            orderBy('updatedAt', 'desc') // This sorts by the most recently updated notes first
         );
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -31,7 +31,7 @@ export default function RecentNotes() {
                 const data = doc.data();
                 return {
                     id: doc.id,
-                    courseId: data.courseId || '', // Ensure courseId is a string, even if empty
+                    courseId: data.courseId || '',
                     title: data.title,
                     content: data.content,
                     userId: data.userId,
@@ -39,7 +39,7 @@ export default function RecentNotes() {
                     updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : new Date(),
                 };
             });
-            setRecentNotes(fetchedNotes.slice(0, 5)); // Take top 5 notes
+            setRecentNotes(fetchedNotes.slice(0, 5)); // This takes only the top 5 notes from the sorted list
             setLoading(false);
         }, (error) => {
             console.error("Error fetching recent notes:", error);
@@ -47,7 +47,7 @@ export default function RecentNotes() {
         });
 
         return () => unsubscribe();
-    }, [authChecked, user?.uid, courses]); // courses added to dependencies to resolve titles
+    }, [authChecked, user?.uid, courses]);
 
     const getCourseTitle = (courseId: string) => {
         if (!courseId) return 'General';

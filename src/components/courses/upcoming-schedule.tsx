@@ -1,53 +1,72 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
+// /components/courses/upcoming-schedule.tsx
+
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useStore, Schedule, Course } from '@/store/useStore'
+import { collection, query, onSnapshot, where } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
-import { collection, query, where, onSnapshot, orderBy, Timestamp } from 'firebase/firestore'
-import { FiCalendar, FiClock, FiMapPin, FiBookOpen, FiEdit } from 'react-icons/fi'
-import LoadingSpinner from '@/components/ui/loading-spinner'
+import { FiCalendar, FiClock, FiMapPin, FiBook } from 'react-icons/fi'
 import Link from 'next/link'
 
-export default function UpcomingSchedule() {
-    const { user, authChecked, courses } = useStore()
-    const [upcomingSchedules, setUpcomingSchedules] = useState<Schedule[]>([])
-    const [loading, setLoading] = useState(true)
+interface UpcomingScheduleProps {
+    allCourses: Course[];
+}
+
+// Helper function to get the numeric day of the week (0 for Sunday, 1 for Monday, etc.)
+const dayOfWeekMap: { [key: string]: number } = {
+    'Sunday': 0, 'Monday': 1, 'Tuesday': 2, 'Wednesday': 3, 'Thursday': 4, 'Friday': 5, 'Saturday': 6
+};
+
+// Helper function to find the next occurrence of a recurring weekly event
+const getNextEventDate = (day: string, time: string): Date | null => {
+    const today = new Date();
+    const todayDay = today.getDay(); // 0 for Sunday, 1 for Monday
+    const targetDay = dayOfWeekMap[day];
+
+    if (targetDay === undefined) return null;
+
+    let daysUntilNext = targetDay - todayDay;
+    if (daysUntilNext < 0) {
+        daysUntilNext += 7; // Add a week if the day has already passed
+    }
+    
+    const nextEventDate = new Date(today.getTime());
+    nextEventDate.setDate(today.getDate() + daysUntilNext);
+
+    const [hours, minutes] = time.split(':').map(Number);
+    nextEventDate.setHours(hours, minutes, 0, 0);
+
+    if (daysUntilNext === 0 && nextEventDate < today) {
+        nextEventDate.setDate(today.getDate() + 7);
+    }
+
+    return nextEventDate;
+};
+
+
+export default function UpcomingSchedule({ allCourses }: UpcomingScheduleProps) {
+    const { user, authChecked } = useStore();
+    const [upcomingEvent, setUpcomingEvent] = useState<Schedule | null>(null);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         if (!authChecked || !user?.uid) {
             setLoading(false);
-            setUpcomingSchedules([]);
             return;
         }
 
-        setLoading(true);
-        const now = new Date();
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const tomorrow = new Date(today);
-        tomorrow.setDate(today.getDate() + 1);
-
-        // Define days of week for consistent ordering
-        const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-        const currentDayIndex = now.getDay(); // 0 for Sunday, 1 for Monday, etc.
-
-        // Fetch schedules for today and the next 7 days, sorted by day and time
-        // This query fetches all schedules for the user and then filters/sorts client-side
-        // for "upcoming" logic, as complex date queries are hard in Firestore.
         const q = query(
             collection(db, 'schedules'),
-            where('userId', '==', user.uid),
-            orderBy('day', 'asc'), // Order by day
-            orderBy('startTime', 'asc') // Then by time
+            where('userId', '==', user.uid)
         );
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const fetchedSchedules: Schedule[] = snapshot.docs.map(doc => {
+            const allSchedules: Schedule[] = snapshot.docs.map(doc => {
                 const data = doc.data();
                 return {
                     id: doc.id,
-                    courseId: data.courseId || '',
-                    userId: data.userId,
                     title: data.title,
                     type: data.type,
                     day: data.day,
@@ -55,40 +74,27 @@ export default function UpcomingSchedule() {
                     endTime: data.endTime,
                     location: data.location || '',
                     recurring: data.recurring,
+                    courseId: data.courseId || '',
+                    userId: data.userId,
                     createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(),
                     updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : new Date(),
                 };
             });
 
-            // Client-side filtering for "upcoming" events
-            const filteredAndSorted = fetchedSchedules.filter(schedule => {
-                // For recurring events, check if they are today or in the future this week
-                const scheduleDayIndex = DAYS_OF_WEEK.indexOf(schedule.day);
-                if (schedule.recurring) {
-                    if (scheduleDayIndex > currentDayIndex) {
-                        return true; // Event is on a future day this week
-                    } else if (scheduleDayIndex === currentDayIndex) {
-                        // If today, check time
-                        const [eventHour, eventMinute] = schedule.startTime.split(':').map(Number);
-                        const eventTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), eventHour, eventMinute);
-                        return eventTime.getTime() > now.getTime();
+            let nextEvent: Schedule | null = null;
+            let soonestDate: Date | null = null;
+
+            allSchedules.forEach(schedule => {
+                const eventDate = getNextEventDate(schedule.day, schedule.startTime);
+                if (eventDate) {
+                    if (!soonestDate || eventDate < soonestDate) {
+                        soonestDate = eventDate;
+                        nextEvent = schedule;
                     }
-                    return false; // Past day this week
                 }
-                // For non-recurring events, you'd need a full date field in Firestore
-                // For simplicity, we're assuming "upcoming" primarily refers to recurring weekly events
-                // or events that are explicitly set for today/future if a full date field existed.
-                // Since we don't have a full date, we'll only show recurring for now.
-                return false; // Non-recurring events without a full date cannot be determined as "upcoming"
-            }).sort((a, b) => {
-                // Sort by day of week, then by time
-                const dayA = DAYS_OF_WEEK.indexOf(a.day);
-                const dayB = DAYS_OF_WEEK.indexOf(b.day);
-                if (dayA !== dayB) return dayA - dayB;
-                return a.startTime.localeCompare(b.startTime);
             });
 
-            setUpcomingSchedules(filteredAndSorted.slice(0, 5)); // Show top 5 upcoming
+            setUpcomingEvent(nextEvent);
             setLoading(false);
         }, (error) => {
             console.error("Error fetching upcoming schedules:", error);
@@ -96,57 +102,70 @@ export default function UpcomingSchedule() {
         });
 
         return () => unsubscribe();
-    }, [authChecked, user?.uid, courses]); // courses added to dependencies to resolve titles
+    }, [authChecked, user?.uid]);
 
     const getCourseTitle = (courseId: string) => {
-        if (!courseId) return 'General';
-        const course = courses.find(c => c.id === courseId);
-        return course ? course.title : 'Unknown Course';
+        const course = allCourses.find(c => c.id === courseId);
+        return course ? `${course.title} (${course.code})` : 'General Schedule';
     };
 
     if (loading) {
         return (
-            <div className="bg-white rounded-xl shadow p-6 flex justify-center items-center min-h-[150px]">
-                <LoadingSpinner />
+            <div className="bg-white rounded-2xl shadow-md p-6 animate-pulse">
+                <h2 className="text-lg sm:text-xl font-bold mb-4 text-gray-900">Upcoming Schedule</h2>
+                <div className="h-6 w-3/4 bg-gray-200 rounded mb-2"></div>
+                <div className="h-4 w-1/2 bg-gray-200 rounded"></div>
             </div>
-        );
+        )
     }
 
     return (
-        <div className="bg-white rounded-xl shadow p-6">
-            <h2 className="text-xl font-bold mb-4 text-gray-900">Upcoming Schedule</h2>
-            {upcomingSchedules.length === 0 ? (
-                <div className="text-center text-gray-600 py-4">
-                    <p className="mb-2">No upcoming events.</p>
-                    <Link href="/dashboard/schedule" className="text-blue-600 hover:underline">
-                        View full schedule
-                    </Link>
+        <div className="bg-white rounded-2xl shadow-md p-4 sm:p-6">
+            <h2 className="text-lg sm:text-xl font-bold mb-4 text-gray-900">Upcoming Schedule</h2>
+            {upcomingEvent ? (
+                <div className="space-y-4">
+                    <div className="flex items-start justify-between">
+                        <div>
+                            <p className="text-xs text-gray-500 uppercase font-semibold tracking-wide">Next Event</p>
+                            <h3 className="text-lg sm:text-xl font-bold text-gray-900 mt-1">{upcomingEvent.title}</h3>
+                        </div>
+                        <div className={`text-xs font-medium px-2 py-1 rounded-full ${
+                            upcomingEvent.type === 'Class' ? 'bg-blue-100 text-blue-800' :
+                            upcomingEvent.type === 'Assignment' ? 'bg-purple-100 text-purple-800' :
+                            upcomingEvent.type === 'Exam' ? 'bg-red-100 text-red-800' :
+                            'bg-gray-100 text-gray-800'
+                        }`}>
+                            {upcomingEvent.type}
+                        </div>
+                    </div>
+                    <div className="space-y-2 text-sm text-gray-600">
+                        <p className="flex items-center">
+                            <FiCalendar className="mr-2 text-gray-400" />
+                            <span>
+                                {upcomingEvent.day}, {upcomingEvent.startTime} - {upcomingEvent.endTime}
+                            </span>
+                        </p>
+                        {upcomingEvent.location && (
+                            <p className="flex items-center">
+                                <FiMapPin className="mr-2 text-gray-400" />
+                                <span>{upcomingEvent.location}</span>
+                            </p>
+                        )}
+                        {upcomingEvent.courseId && (
+                            <p className="flex items-center">
+                                <FiBook className="mr-2 text-gray-400" />
+                                <span className="font-medium text-gray-800">{getCourseTitle(upcomingEvent.courseId)}</span>
+                            </p>
+                        )}
+                    </div>
                 </div>
             ) : (
-                <ul className="space-y-4">
-                    {upcomingSchedules.map(schedule => (
-                        <li key={schedule.id} className="border-l-4 border-blue-500 pl-3 py-1">
-                            <p className="text-sm font-semibold text-gray-800 flex items-center">
-                                {schedule.type === 'Class' && <FiBookOpen className="mr-1 text-blue-600" />}
-                                {schedule.type === 'Assignment' && <FiEdit className="mr-1 text-purple-600" />}
-                                {schedule.type === 'Exam' && <FiCalendar className="mr-1 text-red-600" />}
-                                {schedule.type === 'Other' && <FiClock className="mr-1 text-gray-600" />}
-                                {schedule.title}
-                            </p>
-                            <p className="text-xs text-gray-600 flex items-center mt-0.5">
-                                <FiClock className="mr-1" /> {schedule.day}, {schedule.startTime} - {schedule.endTime}
-                            </p>
-                            {schedule.location && (
-                                <p className="text-xs text-gray-500 flex items-center mt-0.5">
-                                    <FiMapPin className="mr-1" /> {schedule.location}
-                                </p>
-                            )}
-                            <p className="text-xs text-gray-500 mt-0.5">
-                                Course: <span className="font-medium">{getCourseTitle(schedule.courseId)}</span>
-                            </p>
-                        </li>
-                    ))}
-                </ul>
+                <div className="text-center py-6 sm:py-8 text-gray-600">
+                    <p className="mb-2 text-sm sm:text-base">No upcoming schedules found.</p>
+                    <Link href="/schedule/new" className="text-blue-600 hover:underline text-sm sm:text-base">
+                        Add a new schedule item.
+                    </Link>
+                </div>
             )}
         </div>
     )
