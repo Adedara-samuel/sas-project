@@ -1,7 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from 'next/server';
 import { v2 as cloudinary } from 'cloudinary';
+import { Buffer } from 'buffer';
 
-// Configure Cloudinary with your credentials from environment variables
+// Configure Cloudinary with your environment variables
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
     api_key: process.env.CLOUDINARY_API_KEY,
@@ -9,79 +11,54 @@ cloudinary.config({
 });
 
 export async function POST(req: Request) {
-    try {
-        const formData = await req.formData();
-        const file = formData.get('file') as Blob | null;
+    let formData: FormData | null = null;
+    let fileName = 'unknown';
 
-        if (!file) {
-            return NextResponse.json({ error: 'No file uploaded.' }, { status: 400 });
+    try {
+        formData = await req.formData();
+        const file = formData.get('file');
+
+        if (!file || typeof file === 'string') {
+            return NextResponse.json({ error: 'No file uploaded or invalid file.', fileName }, { status: 400 });
         }
 
+        fileName = file.name || fileName;
         const arrayBuffer = await file.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
 
-        // Perform the upload to Cloudinary
-        const result = await new Promise((resolve, reject) => {
-            cloudinary.uploader.upload_stream(
-                {
-                    folder: 'course-materials', // Your desired folder
-                    resource_type: 'auto', // Cloudinary auto-detects resource type (image, video, raw)
-                },
-                (error, result) => {
-                    if (error) {
-                        console.error('Cloudinary upload stream error:', error);
-                        reject(error);
-                    } else {
-                        resolve(result);
-                    }
+        // Upload to Cloudinary
+        const uploadResult = await new Promise((resolve, reject) => {
+            const uploadStream = cloudinary.uploader.upload_stream({
+                folder: 'course-materials', // Specify a folder for organization
+                resource_type: 'auto', // Automatically detect file type
+            }, (error, result) => {
+                if (error) {
+                    return reject(error);
                 }
-            ).end(buffer);
+                resolve(result);
+            });
+            uploadStream.end(buffer);
         });
 
-        const cloudinaryResult = result as {
-            secure_url: string;
-            resource_type: string;
-            format: string; // Cloudinary's detected format (e.g., 'pdf', 'docx', 'png')
-            public_id: string; // The public ID of the uploaded asset
-            bytes: number;
-            version: number; // Cloudinary asset version
+        // The uploadResult from Cloudinary has all the necessary info
+        // We'll destructure it to match the expected format on the frontend
+        const { secure_url, resource_type, bytes, format } = uploadResult as any;
+
+        const result = {
+            secure_url,
+            resource_type,
+            bytes,
+            format,
+            file_name: fileName,
         };
 
-        let viewUrl = cloudinaryResult.secure_url; // Default view URL is the original secure URL
-
-        // Logic to generate a specific view URL for documents (e.g., convert to PDF for viewing)
-        // Cloudinary can convert many document types to PDF for in-browser viewing.
-        const documentFormats = ['doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx', 'txt']; // Add more as needed
-
-        if (cloudinaryResult.resource_type === 'raw' && documentFormats.includes(cloudinaryResult.format)) {
-            // Construct a URL to deliver the raw document as a PDF
-            // Example: https://res.cloudinary.com/<cloud_name>/image/upload/f_pdf/v<version>/<public_id>.<extension>
-            // We use 'image' type with f_pdf transformation for document viewing
-            viewUrl = cloudinary.url(cloudinaryResult.public_id, {
-                resource_type: 'image', // Use 'image' resource type for document transformations
-                format: 'pdf', // Force format to PDF
-                version: cloudinaryResult.version, // Include version for cache invalidation
-                secure: true, // Ensure HTTPS
-            });
-            console.log(`Generated PDF view URL for document: ${viewUrl}`);
-        } else if (cloudinaryResult.resource_type === 'image' || cloudinaryResult.format === 'pdf') {
-            // For actual images and PDFs, the secure_url is already good for viewing
-            viewUrl = cloudinaryResult.secure_url;
-        }
-        // For other resource types (e.g., video), you might need different view URLs/players.
-        // For now, we'll stick to the secure_url for anything not explicitly handled.
-
-
-        return NextResponse.json({
-            secure_url: cloudinaryResult.secure_url,
-            view_url: viewUrl, // Return the generated view URL
-            resource_type: cloudinaryResult.resource_type,
-            bytes: cloudinaryResult.bytes,
-            format: cloudinaryResult.format, // Pass format back for frontend use if needed
-        }, { status: 200 });
-
+        return NextResponse.json(result, { status: 200 });
     } catch (error) {
-        console.error('Unhandled error in /api/upload-material route:', error);
-        return NextResponse.json({ error: 'Internal server error. Check server logs for more details.' }, { status: 500 });
+        const errorMessage = error instanceof Error ? error.message : 'Internal server error. Check server logs for more details.';
+        console.error('Unhandled error in /api/upload-material route:', error, 'File:', fileName);
+        return NextResponse.json({
+            error: errorMessage,
+            file_name: fileName
+        }, { status: 500 });
     }
 }

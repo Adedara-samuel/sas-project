@@ -3,12 +3,11 @@
 
 import { useEffect, useState } from 'react'
 import { useStore, Course } from '@/store/useStore'
-import { db } from '@/lib/firebase'
 import { doc, updateDoc, onSnapshot } from 'firebase/firestore'
-import { FiUploadCloud, FiFileText, FiDownload, FiExternalLink, FiFile, FiCheckCircle, FiXCircle, FiFilePlus, FiX } from 'react-icons/fi'
+import { FiUploadCloud, FiFileText, FiDownload, FiExternalLink, FiFile, FiCheckCircle, FiXCircle, FiFilePlus } from 'react-icons/fi'
 import LoadingSpinner from '@/components/ui/loading-spinner'
-import Link from 'next/link'
 import axios from 'axios'
+import { db } from '@/lib/firebase'
 
 // Helper function to get icon based on file type
 const getFileIcon = (mimeType?: string) => {
@@ -16,8 +15,8 @@ const getFileIcon = (mimeType?: string) => {
     if (mimeType.includes('pdf')) return <FiFile className="text-red-500" />;
     if (mimeType.includes('word') || mimeType.includes('document')) return <FiFileText className="text-blue-700" />;
     if (mimeType.includes('image')) return <FiFilePlus className="text-green-500" />;
-    if (mimeType.includes('presentation')) return <FiFileText className="text-orange-500" />; // For PPTX
-    if (mimeType.includes('spreadsheet')) return <FiFileText className="text-green-700" />; // For XLSX
+    if (mimeType.includes('presentation')) return <FiFileText className="text-orange-500" />;
+    if (mimeType.includes('spreadsheet')) return <FiFileText className="text-green-700" />;
     if (mimeType.includes('zip')) return <FiFile className="text-purple-500" />;
     return <FiFile className="text-gray-500" />;
 };
@@ -28,11 +27,9 @@ const formatFileSize = (sizeInBytes?: number) => {
     return `${sizeInMB.toFixed(2)} MB`;
 };
 
-// Define the type for a material resource, including the new viewUrl
 interface MaterialResource {
     name: string;
-    url: string; // Original URL (for download)
-    viewUrl?: string; // URL for in-browser viewing (e.g., PDF version)
+    url: string;
     type?: string;
     size?: number;
 }
@@ -44,10 +41,15 @@ export default function ResourcesTab() {
     const [courseResources, setCourseResources] = useState<MaterialResource[]>([]);
     const [loadingResources, setLoadingResources] = useState(true);
     const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
-    const [viewingResource, setViewingResource] = useState<MaterialResource | null>(null);
-
+    
     const canUpload = user && currentCourse && user.uid === currentCourse.userId;
 
+    // This function now generates the URL for your Next.js API route
+    const getDownloadUrl = (url: string, originalName: string, mimeType?: string) => {
+        // Construct the URL to your API route, passing the necessary parameters
+        return `/api/download-material?url=${encodeURIComponent(url)}&name=${encodeURIComponent(originalName)}&type=${encodeURIComponent(mimeType || 'application/octet-stream')}`;
+    };
+    
     useEffect(() => {
         console.log('Frontend: useEffect triggered for resource loading. AuthChecked:', authChecked, 'CurrentCourse ID:', currentCourse?.id);
         if (!authChecked || !currentCourse?.id) {
@@ -77,7 +79,7 @@ export default function ResourcesTab() {
             setLoadingResources(false);
         }, (error) => {
             console.error("Frontend: Error fetching course resources from Firestore:", error);
-            setMessage({ text: 'Failed to load course resources.', type: 'error' });
+            setMessage({ text: 'Failed to load course resources. Check your network connection and try again.', type: 'error' });
             setLoadingResources(false);
         });
 
@@ -88,7 +90,7 @@ export default function ResourcesTab() {
         if (e.target.files && e.target.files[0]) {
             const MAX_FILE_SIZE_MB = 10;
             if (e.target.files[0].size > MAX_FILE_SIZE_MB * 1024 * 1024) {
-                setMessage({ text: `File size exceeds ${MAX_FILE_SIZE_MB}MB limit.`, type: 'error' });
+                setMessage({ text: `File "${e.target.files[0].name}" exceeds ${MAX_FILE_SIZE_MB}MB limit.`, type: 'error' });
                 setFile(null);
             } else {
                 setFile(e.target.files[0]);
@@ -99,7 +101,7 @@ export default function ResourcesTab() {
     };
 
     const uploadFileToCloudinary = async (fileToUpload: File): Promise<MaterialResource | null> => {
-        console.log('Frontend: Calling /api/upload-material...');
+        console.log('Frontend: Calling /api/upload-material for file:', fileToUpload.name);
         try {
             const formData = new FormData();
             formData.append('file', fileToUpload);
@@ -110,31 +112,30 @@ export default function ResourcesTab() {
                 },
             });
 
-            const { secure_url, view_url, resource_type, bytes } = response.data;
-            console.log('Frontend: API Response for Cloudinary upload:', { secure_url, view_url, resource_type, bytes });
+            const { secure_url, resource_type, bytes, format } = response.data;
+            console.log('Frontend: API Response for upload:', { secure_url, resource_type, bytes, format });
 
             return {
                 name: fileToUpload.name,
                 url: secure_url,
-                viewUrl: view_url,
-                type: fileToUpload.type || resource_type,
+                type: fileToUpload.type || `application/${format}` || resource_type,
                 size: fileToUpload.size || bytes,
             };
         } catch (error: unknown) {
-            console.error('Frontend: Cloudinary upload failed:', error);
+            console.error('Frontend: Upload failed for file:', fileToUpload.name, error);
             if (axios.isAxiosError(error) && error.response) {
-                setMessage({ text: `Upload failed: ${error.response.data.error || 'Server error'}`, type: 'error' });
+                setMessage({ text: `Upload failed for "${fileToUpload.name}": ${error.response.data.error || 'Server error'}`, type: 'error' });
             } else if (error instanceof Error) {
-                setMessage({ text: `Upload failed: ${error.message}`, type: 'error' });
+                setMessage({ text: `Upload failed for "${fileToUpload.name}": ${error.message}`, type: 'error' });
             } else {
-                setMessage({ text: 'An unknown error occurred during upload.', type: 'error' });
+                setMessage({ text: `An unknown error occurred during upload of "${fileToUpload.name}".`, type: 'error' });
             }
             return null;
         }
     };
 
     const handleUpload = async () => {
-        console.log('Frontend: handleUpload triggered.');
+        console.log('Frontend: handleUpload triggered for file:', file?.name);
         if (!file || !user || !currentCourse) {
             setMessage({ text: 'Please select a file to upload.', type: 'error' });
             return;
@@ -163,31 +164,21 @@ export default function ResourcesTab() {
 
                 setMessage({ text: `File "${file.name}" uploaded and added to course resources!`, type: 'success' });
                 setFile(null);
-                console.log('Frontend: Firestore updated successfully.');
+                console.log('Frontend: Firestore updated successfully for file:', file.name);
             } else {
                 console.log('Frontend: Uploaded material is null, not updating Firestore.');
             }
         } catch (error: unknown) {
             console.error('Frontend: Error updating course document with new material:', error);
             if (error instanceof Error) {
-                setMessage({ text: `Failed to save resource to course: ${error.message}`, type: 'error' });
+                setMessage({ text: `Failed to save resource "${file?.name}": ${error.message}`, type: 'error' });
             } else {
-                setMessage({ text: 'An unknown error occurred while saving resource.', type: 'error' });
+                setMessage({ text: `An unknown error occurred while saving resource "${file?.name}".`, type: 'error' });
             }
         } finally {
             setUploading(false);
-            console.log('Frontend: Upload process finished.');
+            console.log('Frontend: Upload process finished for file:', file?.name);
         }
-    };
-
-    const handleViewMaterial = (resource: MaterialResource) => {
-        console.log('Frontend: Viewing resource:', resource);
-        setViewingResource(resource);
-    };
-
-    const handleCloseViewer = () => {
-        console.log('Frontend: Closing viewer.');
-        setViewingResource(null);
     };
 
     if (!currentCourse) {
@@ -207,7 +198,7 @@ export default function ResourcesTab() {
     }
 
     return (
-        <div className="p-4 md:p-6 lg:p-8 space-y-8">
+        <div className="p-4 md:p-6 lg:p-8 space-y-8 font-sans">
             <h2 className="text-3xl font-extrabold text-gray-900">Course Materials</h2>
             <p className="text-gray-600">Access and manage all the study materials for this course, including lecture slides, documents, and other useful files.</p>
 
@@ -228,7 +219,7 @@ export default function ResourcesTab() {
                                 {file ? `Selected file: ${file.name}` : 'Drag & drop a file here or click to browse'}
                             </p>
                             <span className="text-sm text-gray-500 mt-1">
-                                Max size 10MB (PDF, DOCX, PPTX, etc.)
+                                Max size 10MB (PDF, DOCX, PPTX, etc. or images)
                             </span>
                             <input
                                 id="resource-file-upload"
@@ -246,7 +237,7 @@ export default function ResourcesTab() {
                         >
                             {uploading ? (
                                 <span className="flex items-center">
-                                    <LoadingSpinner size="sm"/> Uploading...
+                                    <LoadingSpinner size="sm" /> Uploading...
                                 </span>
                             ) : (
                                 <>
@@ -264,7 +255,7 @@ export default function ResourcesTab() {
                 {courseResources.length > 0 ? (
                     <ul className="divide-y divide-gray-200">
                         {courseResources.map((resource, index) => (
-                            <li key={index} className="px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors duration-200">
+                            <li key={index} className="px-6 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between hover:bg-gray-50 transition-colors duration-200">
                                 <div className="flex items-center flex-1 min-w-0">
                                     <div className="p-2 bg-gray-100 rounded-md">
                                         {getFileIcon(resource.type)}
@@ -272,28 +263,30 @@ export default function ResourcesTab() {
                                     <div className="ml-4 flex-1 truncate">
                                         <p className="text-lg font-medium text-gray-900 truncate">{resource.name}</p>
                                         <p className="text-sm text-gray-500">
-                                            {formatFileSize(resource.size)}
+                                            {formatFileSize(resource.size)} {resource.type ? `(${resource.type})` : ''}
                                         </p>
                                     </div>
                                 </div>
-                                <div className="flex items-center space-x-2 sm:space-x-4 ml-4 flex-shrink-0">
-                                    <Link
-                                        href={resource.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
+                                <div className="flex items-center space-x-2 sm:space-x-4 ml-0 sm:ml-4 mt-4 sm:mt-0 flex-shrink-0">
+                                    {/* The href for the download link now correctly points to your API route with all parameters */}
+                                    <a
+                                        href={getDownloadUrl(resource.url, resource.name, resource.type)}
                                         download={resource.name}
                                         className="p-2 text-blue-600 hover:text-blue-800 transition-colors duration-200 rounded-full hover:bg-blue-50"
                                         title="Download Material"
                                     >
                                         <FiDownload className="text-xl" />
-                                    </Link>
-                                    <button
-                                        onClick={() => handleViewMaterial(resource)}
+                                    </a>
+                                    {/* The view link still opens the resource directly in a new tab */}
+                                    <a
+                                        href={resource.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
                                         className="p-2 text-gray-500 hover:text-gray-700 transition-colors duration-200 rounded-full hover:bg-gray-100"
-                                        title="View Material"
+                                        title="View Material in a new tab"
                                     >
                                         <FiExternalLink className="text-xl" />
-                                    </button>
+                                    </a>
                                 </div>
                             </li>
                         ))}
@@ -308,37 +301,6 @@ export default function ResourcesTab() {
                     </div>
                 )}
             </div>
-
-            {/* Material Viewer Modal */}
-            {viewingResource && (
-                <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl h-full max-h-[90vh] flex flex-col overflow-hidden">
-                        <div className="flex justify-between items-center p-4 border-b border-gray-200">
-                            <h3 className="text-xl font-semibold text-gray-800 truncate">
-                                Viewing: {viewingResource.name}
-                            </h3>
-                            <button
-                                onClick={handleCloseViewer}
-                                className="p-2 rounded-full hover:bg-gray-100 text-gray-600 hover:text-gray-900 transition-colors"
-                                title="Close Viewer"
-                            >
-                                <FiX className="text-2xl" />
-                            </button>
-                        </div>
-                        <div className="flex-1 p-2">
-                            {/* Use viewUrl for the iframe source */}
-                            <iframe
-                                src={viewingResource.viewUrl || viewingResource.url} // Prefer viewUrl, fallback to original
-                                title={viewingResource.name}
-                                className="w-full h-full border-0 rounded-lg"
-                                allowFullScreen
-                            >
-                                <p>Your browser does not support iframes. You can <a href={viewingResource.url} target="_blank" rel="noopener noreferrer">download the file</a> instead.</p>
-                            </iframe>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }
