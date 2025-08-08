@@ -82,7 +82,6 @@ export default function ProfilePage() {
         try {
             const formData = new FormData()
             formData.append('file', file)
-            // The API route will handle the secure upload to Cloudinary.
             const response = await axios.post('/api/upload-photo', formData)
             const { secure_url } = response.data
             return secure_url
@@ -202,7 +201,19 @@ export default function ProfilePage() {
                                             <input
                                                 type="file"
                                                 accept="image/*"
-                                                onChange={(e) => e.target.files && setLocalPhotoFile(e.target.files[0])}
+                                                onChange={(e) => {
+                                                    const file = e.target.files?.[0];
+                                                    if (file) {
+                                                        const maxFileSize = 5 * 1024 * 1024; // 5MB
+                                                        if (file.size > maxFileSize) {
+                                                            setMessage({ text: 'File size must be less than 5MB.', type: 'error' });
+                                                            setLocalPhotoFile(null);
+                                                            e.target.value = ''; // Reset file input
+                                                            return;
+                                                        }
+                                                        setLocalPhotoFile(file);
+                                                    }
+                                                }}
                                                 className="hidden"
                                             />
                                         </label>
@@ -274,14 +285,13 @@ export default function ProfilePage() {
                                         </div>
                                         <div className="relative">
                                             <select
-                                                // onChange={(e) => handleSetLanguage(e.target.value as 'en' | 'fr' | 'es')}
                                                 className="appearance-none bg-white border border-gray-300 text-gray-800 outline-none rounded-lg pl-4 pr-10 py-2 text-base shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors duration-300"
                                             >
                                                 <option value="en">English</option>
                                                 <option value="fr">Français</option>
                                                 <option value="es">Español</option>
                                             </select>
-                                            <FiGlobe  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 pointer-events-none" />
+                                            <FiGlobe className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 pointer-events-none" />
                                         </div>
                                     </div>
                                 </div>
