@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react'
 import { useStore, Course } from '@/store/useStore'
 import { doc, updateDoc, onSnapshot } from 'firebase/firestore'
-import { FiUploadCloud, FiFileText, FiDownload, FiExternalLink, FiFile, FiCheckCircle, FiXCircle, FiFilePlus } from 'react-icons/fi'
+import { FiUploadCloud, FiFileText, FiExternalLink, FiFile, FiCheckCircle, FiXCircle, FiFilePlus, FiX } from 'react-icons/fi'
 import LoadingSpinner from '@/components/ui/loading-spinner'
 import axios from 'axios'
 import { db } from '@/lib/firebase'
@@ -41,15 +41,45 @@ export default function ResourcesTab() {
     const [courseResources, setCourseResources] = useState<MaterialResource[]>([]);
     const [loadingResources, setLoadingResources] = useState(true);
     const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+    const [viewerUrl, setViewerUrl] = useState<string | null>(null);
     
     const canUpload = user && currentCourse && user.uid === currentCourse.userId;
 
-    // This function now generates the URL for your Next.js API route
-    const getDownloadUrl = (url: string, originalName: string, mimeType?: string) => {
-        // Construct the URL to your API route, passing the necessary parameters
-        return `/api/download-material?url=${encodeURIComponent(url)}&name=${encodeURIComponent(originalName)}&type=${encodeURIComponent(mimeType || 'application/octet-stream')}`;
+    // This function generates a viewable URL for different file types
+    const getViewerUrl = (url: string, type?: string) => {
+        if (!type) return url;
+        
+        // For PDFs and document types, try Microsoft Office Online Viewer
+        if (type.includes('pdf') || 
+            type.includes('document') || 
+            type.includes('spreadsheet') || 
+            type.includes('presentation')) {
+            return `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(url)}`;
+        }
+        
+        // For images, use the direct URL
+        if (type.includes('image')) {
+            return url;
+        }
+        
+        // Fallback to direct URL for other types
+        return url;
     };
+
+    // This function now generates the URL for your Next.js API route
+    // const getDownloadUrl = (url: string, originalName: string, mimeType?: string) => {
+    //     // Construct the URL to your API route, passing the necessary parameters
+    //     return `/api/download-material?url=${encodeURIComponent(url)}&name=${encodeURIComponent(originalName)}&type=${encodeURIComponent(mimeType || 'application/octet-stream')}`;
+    // };
     
+    const openPdfViewer = (url: string) => {
+        setViewerUrl(url);
+    };
+
+    const closePdfViewer = () => {
+        setViewerUrl(null);
+    };
+
     useEffect(() => {
         console.log('Frontend: useEffect triggered for resource loading. AuthChecked:', authChecked, 'CurrentCourse ID:', currentCourse?.id);
         if (!authChecked || !currentCourse?.id) {
@@ -268,25 +298,13 @@ export default function ResourcesTab() {
                                     </div>
                                 </div>
                                 <div className="flex items-center space-x-2 sm:space-x-4 ml-0 sm:ml-4 mt-4 sm:mt-0 flex-shrink-0">
-                                    {/* The href for the download link now correctly points to your API route with all parameters */}
-                                    <a
-                                        href={getDownloadUrl(resource.url, resource.name, resource.type)}
-                                        download={resource.name}
-                                        className="p-2 text-blue-600 hover:text-blue-800 transition-colors duration-200 rounded-full hover:bg-blue-50"
-                                        title="Download Material"
+                                    <button
+                                        onClick={() => openPdfViewer(resource.url)}
+                                        className="flex items-center px-4 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg transition-colors duration-200 text-sm font-medium"
                                     >
-                                        <FiDownload className="text-xl" />
-                                    </a>
-                                    {/* The view link still opens the resource directly in a new tab */}
-                                    <a
-                                        href={resource.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="p-2 text-gray-500 hover:text-gray-700 transition-colors duration-200 rounded-full hover:bg-gray-100"
-                                        title="View Material in a new tab"
-                                    >
-                                        <FiExternalLink className="text-xl" />
-                                    </a>
+                                        <FiExternalLink className="mr-2" />
+                                        View
+                                    </button>
                                 </div>
                             </li>
                         ))}
@@ -301,6 +319,30 @@ export default function ResourcesTab() {
                     </div>
                 )}
             </div>
+
+            {/* PDF Viewer Modal */}
+            {viewerUrl && (
+                <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg w-full max-w-5xl h-[90vh] flex flex-col">
+                        <div className="flex justify-between items-center p-4 border-b">
+                            <h3 className="text-lg font-semibold">Document Viewer</h3>
+                            <button 
+                                onClick={closePdfViewer}
+                                className="text-gray-500 hover:text-gray-700"
+                            >
+                                <FiX className="text-2xl" />
+                            </button>
+                        </div>
+                        <div className="flex-1 overflow-hidden">
+                            <iframe 
+                                src={`/api/viewer?url=${encodeURIComponent(viewerUrl)}`} 
+                                className="w-full h-full border-0"
+                                title="Document Viewer"
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
