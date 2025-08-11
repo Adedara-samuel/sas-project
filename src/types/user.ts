@@ -8,6 +8,8 @@ export interface User {
     name: string | null; // Editable name, potentially from Firestore profile
     displayName: string | null; // From Firebase Auth (e.g., Google sign-in name)
     role: 'admin' | 'student'; // Role must be 'admin' or 'student'
+    school: string | null;
+    department: string | null
     photoURL: string | null; // Photo URL
     metadata: {
         creationTime: string | undefined;

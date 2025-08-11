@@ -2,20 +2,9 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { Timestamp } from 'firebase/firestore';
+import { User } from '../types/user';
 
-export interface User {
-    id: string; // This should always be the Firebase UID
-    uid: string; // Firebase UID (redundant but kept for clarity if needed elsewhere)
-    email: string | null;
-    name: string | null; // This will be the editable name, potentially stored in Firestore
-    displayName: string | null; // This will reflect Firebase Auth's displayName
-    role: 'admin' | 'student'; // Role must be 'admin' or 'student'
-    photoURL: string | null; // photoURL can be null
-    metadata: {
-        creationTime: string | undefined;
-        lastSignInTime: string | undefined;
-    };
-}
+// Course interface remains the same
 export interface Course {
     id: string
     title: string
@@ -33,6 +22,7 @@ export interface Course {
     }[];
 }
 
+// Book interface remains the same
 export interface Book {
     id: string
     title: string
@@ -46,6 +36,7 @@ export interface Book {
     createdAt: Date
 }
 
+// Note interface remains the same
 export interface Note {
     id: string
     courseId: string
@@ -56,6 +47,7 @@ export interface Note {
     userId: string
 }
 
+// Schedule interface remains the same
 export interface Schedule {
     id: string
     courseId: string
@@ -99,7 +91,7 @@ interface StoreState {
     courses: Course[]
     books: Book[]
     notes: Note[]
-    schedules: Schedule[] // Ensure schedules are managed by Zustand
+    schedules: Schedule[]
     currentCourse: Course | null
     authChecked: boolean
     darkMode: boolean
@@ -110,7 +102,7 @@ interface StoreState {
     setCourses: (courses: Course[]) => void
     setBooks: (books: Book[]) => void
     setNotes: (notes: Note[]) => void
-    setSchedules: (schedules: Schedule[]) => void // Action to set schedules
+    setSchedules: (schedules: Schedule[]) => void
     setCurrentCourse: (course: Course | null) => void
     setAuthChecked: (checked: boolean) => void
     toggleDarkMode: () => void
@@ -124,7 +116,7 @@ export const useStore = create<StoreState>()(
             courses: [],
             books: [],
             notes: [],
-            schedules: [], // Initialize schedules
+            schedules: [],
             currentCourse: null,
             authChecked: false,
             darkMode: false,
@@ -134,7 +126,7 @@ export const useStore = create<StoreState>()(
             setCourses: (courses) => set({ courses }),
             setBooks: (books) => set({ books }),
             setNotes: (notes) => set({ notes }),
-            setSchedules: (schedules) => set({ schedules }), // Implement setSchedules
+            setSchedules: (schedules) => set({ schedules }),
             setCurrentCourse: (course) => set({ currentCourse: course }),
             setAuthChecked: (checked) => set({ authChecked: checked }),
             toggleDarkMode: () => set((state) => ({ darkMode: !state.darkMode })),

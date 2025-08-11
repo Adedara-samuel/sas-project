@@ -3,7 +3,7 @@
 
 import { useState } from 'react'
 import { createUserWithEmailAndPassword } from 'firebase/auth'
-import { auth, db } from '@/lib/firebase'
+import { auth, db } from '@/lib/firebase' // Assumes firebase config is correctly set up
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { FiUser, FiMail, FiLock, FiBook, FiHash, FiAlertCircle } from 'react-icons/fi'
 
@@ -13,6 +13,7 @@ export default function RegisterForm() {
     const [fullName, setFullName] = useState('')
     const [matricNumber, setMatricNumber] = useState('')
     const [department, setDepartment] = useState('')
+    const [school, setSchool] = useState('')
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(false)
 
@@ -29,10 +30,13 @@ export default function RegisterForm() {
                 fullName,
                 matricNumber,
                 department,
+                school, // Store the manually entered school name
                 email,
                 createdAt: serverTimestamp(),
-                role: 'student'
+                role: 'student',
             })
+            // Registration successful, you might redirect the user here
+            console.log('User registered successfully!', user)
         } catch (err: any) {
             setError(err.message.replace(' ', ''))
             setLoading(false)
@@ -49,6 +53,7 @@ export default function RegisterForm() {
             )}
 
             <div className="grid grid-cols-1 gap-4">
+                {/* Full Name Input */}
                 <div>
                     <label htmlFor="fullName" className="block text-sm font-medium text-gray-700">
                         Full Name
@@ -70,6 +75,7 @@ export default function RegisterForm() {
                     </div>
                 </div>
 
+                {/* Matric Number Input */}
                 <div>
                     <label htmlFor="matricNumber" className="block text-sm font-medium text-gray-700">
                         Matric Number
@@ -91,6 +97,29 @@ export default function RegisterForm() {
                     </div>
                 </div>
 
+                {/* School Input (Simple Text) */}
+                <div>
+                    <label htmlFor="school" className="block text-sm font-medium text-gray-700">
+                        My School
+                    </label>
+                    <div className="mt-1 relative rounded-md shadow-sm">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <FiBook className="h-5 w-5 text-gray-400" />
+                        </div>
+                        <input
+                            id="school"
+                            name="school"
+                            type="text"
+                            required
+                            value={school}
+                            onChange={(e) => setSchool(e.target.value)}
+                            className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-10 text-sm border-gray-300 rounded-md py-2.5 border text-black sm:text-base sm:py-3"
+                            placeholder="University of Lagos"
+                        />
+                    </div>
+                </div>
+
+                {/* Department Input */}
                 <div>
                     <label htmlFor="department" className="block text-sm font-medium text-gray-700">
                         Department
@@ -112,6 +141,7 @@ export default function RegisterForm() {
                     </div>
                 </div>
 
+                {/* Email Input */}
                 <div>
                     <label htmlFor="email" className="block text-sm font-medium text-gray-700">
                         Email Address
@@ -134,6 +164,7 @@ export default function RegisterForm() {
                     </div>
                 </div>
 
+                {/* Password Input */}
                 <div>
                     <label htmlFor="password" className="block text-sm font-medium text-gray-700">
                         Password

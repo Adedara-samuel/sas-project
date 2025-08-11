@@ -6,7 +6,7 @@ import { useStore } from '@/store/useStore'
 import { updateProfile } from 'firebase/auth'
 import { auth, db } from '@/lib/firebase'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
-import { FiEdit, FiUpload, FiCheckCircle, FiXCircle, FiGlobe } from 'react-icons/fi'
+import { FiEdit, FiUpload, FiCheckCircle, FiXCircle, FiGlobe, FiBook } from 'react-icons/fi'
 import LoadingSpinner from '@/components/ui/loading-spinner'
 import { User } from '@/types/user'
 import axios from 'axios'
@@ -14,6 +14,8 @@ import axios from 'axios'
 export default function ProfilePage() {
     const { user, setUser, authChecked } = useStore()
     const [localName, setLocalName] = useState(user?.name || '')
+    const [localSchool, setLocalSchool] = useState(user?.school || '')
+    const [localDepartment, setLocalDepartment] = useState(user?.department || '')
     const [localPhotoFile, setLocalPhotoFile] = useState<File | null>(null)
 
     const [isEditing, setIsEditing] = useState(false)
@@ -40,6 +42,8 @@ export default function ProfilePage() {
                     name: auth.currentUser.displayName,
                     photoURL: auth.currentUser.photoURL,
                     role: 'student',
+                    school: '',
+                    department: '',
                 }
                 await setDoc(userDocRef, firestoreData, { merge: true })
             }
@@ -56,10 +60,14 @@ export default function ProfilePage() {
                 },
                 name: firestoreData.name || auth.currentUser.displayName || null,
                 role: (firestoreData.role as 'admin' | 'student') || 'student',
+                school: firestoreData.school || null,
+                department: firestoreData.department || null,
             }
 
             setUser(updatedUser)
             setLocalName(updatedUser.name || '')
+            setLocalSchool(updatedUser.school || '')
+            setLocalDepartment(updatedUser.department || '')
         } catch (error: unknown) {
             console.error('Error fetching user profile from Firestore:', error)
             if (error instanceof Error) {
@@ -124,6 +132,8 @@ export default function ProfilePage() {
             const firestoreUpdateData = {
                 name: localName,
                 photoURL: newPhotoURL,
+                school: localSchool,
+                department: localDepartment,
             }
             await setDoc(userDocRef, firestoreUpdateData, { merge: true })
 
@@ -133,6 +143,8 @@ export default function ProfilePage() {
                 name: localName,
                 displayName: localName,
                 photoURL: newPhotoURL,
+                school: localSchool,
+                department: localDepartment,
             }
             setUser(updatedUserInStore)
 
@@ -177,7 +189,7 @@ export default function ProfilePage() {
                         {message && (
                             <div
                                 className={`absolute top-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg shadow-md flex items-center space-x-2
-                            ${message.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}
+                                ${message.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}
                             >
                                 {message.type === 'success' ? <FiCheckCircle /> : <FiXCircle />}
                                 <span>{message.text}</span>
@@ -305,6 +317,48 @@ export default function ProfilePage() {
                                     <div>
                                         <p className="text-sm text-gray-500">Email Address</p>
                                         <p className="font-medium text-gray-800 text-lg">{user.email}</p>
+                                    </div>
+
+                                    {/* School */}
+                                    <div>
+                                        <p className="text-sm text-gray-500">School</p>
+                                        {isEditing ? (
+                                            <div className="mt-1 relative rounded-md shadow-sm">
+                                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                                    <FiBook className="h-5 w-5 text-gray-400" />
+                                                </div>
+                                                <input
+                                                    type="text"
+                                                    value={localSchool}
+                                                    onChange={(e) => setLocalSchool(e.target.value)}
+                                                    className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-10 text-sm border-gray-300 rounded-md py-2.5 border text-black sm:text-base sm:py-3"
+                                                    placeholder="e.g. University of Lagos"
+                                                />
+                                            </div>
+                                        ) : (
+                                            <p className="font-medium text-gray-800 text-lg">{user.school || 'Not specified'}</p>
+                                        )}
+                                    </div>
+
+                                    {/* Department */}
+                                    <div>
+                                        <p className="text-sm text-gray-500">Department</p>
+                                        {isEditing ? (
+                                            <div className="mt-1 relative rounded-md shadow-sm">
+                                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                                    <FiBook className="h-5 w-5 text-gray-400" />
+                                                </div>
+                                                <input
+                                                    type="text"
+                                                    value={localDepartment}
+                                                    onChange={(e) => setLocalDepartment(e.target.value)}
+                                                    className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-10 text-sm border-gray-300 rounded-md py-2.5 border text-black sm:text-base sm:py-3"
+                                                    placeholder="e.g. Computer Science"
+                                                />
+                                            </div>
+                                        ) : (
+                                            <p className="font-medium text-gray-800 text-lg">{user.department || 'Not specified'}</p>
+                                        )}
                                     </div>
 
                                     {/* Role */}
