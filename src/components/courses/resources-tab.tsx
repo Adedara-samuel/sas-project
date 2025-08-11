@@ -239,7 +239,8 @@ export default function ResourcesTab() {
                 </div>
             )}
 
-        
+        {/* this is for the course resources view.... check view-course.tsx */}
+        {/* another file created inn  types folder for course resources(course.ts) */}
 
                     <CourseResources
                     courseResources={courseResources.map(resource => {
