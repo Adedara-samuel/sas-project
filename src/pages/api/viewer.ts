@@ -1,76 +1,113 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import axios from 'axios';
-import { createHash } from 'crypto';
+
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
   const { url } = req.query;
-  
+
   if (!url || typeof url !== 'string') {
-    return res.status(400).send('URL parameter is required');
+    return res.status(400).json({ error: 'URL parameter is required' });
   }
 
   try {
-    // Fetch the PDF from Cloudinary with authentication
-    const response = await axios.get(url, {
+    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+    const apiKey = process.env.CLOUDINARY_API_KEY;
+    const apiSecret = process.env.CLOUDINARY_API_SECRET;
+
+    if (!cloudName || !apiKey || !apiSecret) {
+      throw new Error('Cloudinary credentials not configured');
+    }
+
+    // Extract public ID from URL
+    const publicId = extractPublicId(url);
+    console.log('Extracted Public ID:', publicId);
+
+    // Since your PDFs are stored as "image" resource type, use that specifically
+    const authenticatedUrl = `https://${apiKey}:${apiSecret}@res.cloudinary.com/${cloudName}/image/upload/${publicId}`;
+    
+    console.log('Accessing URL:', authenticatedUrl.replace(`${apiKey}:${apiSecret}@`, '[CREDENTIALS]@'));
+
+    const response = await axios.get(authenticatedUrl, {
       responseType: 'arraybuffer',
+      timeout: 30000,
       headers: {
-        'Accept': 'application/pdf',
+        'Accept': 'application/pdf, application/octet-stream, */*',
+        'User-Agent': 'Mozilla/5.0 (compatible; PDF-Viewer/1.0)'
       },
-      // Add authentication if needed
-      auth: {
-        username: process.env.CLOUDINARY_API_KEY || '',
-        password: process.env.CLOUDINARY_API_SECRET || ''
-      }
+      validateStatus: (status) => status < 400
     });
 
-    // Set the appropriate headers
+    if (response.status !== 200) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const pdfBuffer = Buffer.from(response.data);
+    console.log('PDF loaded successfully, size:', pdfBuffer.length, 'bytes');
+
+    // Set proper PDF headers
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'inline; filename=document.pdf');
+    res.setHeader('Content-Length', pdfBuffer.length.toString());
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET');
+
+    return res.send(pdfBuffer);
+
+  } catch (error: any) {
+    console.error('Error loading PDF:', {
+      message: error.message,
+      status: error.response?.status,
+      statusText: error.response?.statusText
+    });
+
+    const status = error.response?.status || 500;
+    const message = error.response?.status === 401 
+      ? 'Authentication failed - check Cloudinary credentials'
+      : error.response?.status === 404
+      ? 'PDF not found - check the URL and public ID'
+      : 'Error loading PDF document';
+
+    return res.status(status).json({ 
+      error: 'Error loading document',
+      message,
+      details: error.message
+    });
+  }
+}
+
+function extractPublicId(url: string): string {
+  try {
+    // Parse the Cloudinary URL to extract public ID
+    const urlObj = new URL(url);
+    const pathParts = urlObj.pathname.split('/');
     
-    // Send the PDF data
-    return res.send(response.data);
-  } catch (error: unknown) {
-    console.error('Error fetching PDF:', error);
+    // Find the 'upload' segment
+    const uploadIndex = pathParts.findIndex(part => part === 'upload');
     
-    // If we get a 401, try with signed URL
-    if (error && typeof error === 'object' && 'response' in error && 
-        error.response && typeof error.response === 'object' &&
-        'status' in error.response && error.response.status === 401) {
-      try {
-        // Create a signed URL using your Cloudinary credentials
-        const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
-        const apiKey = process.env.CLOUDINARY_API_KEY;
-        const apiSecret = process.env.CLOUDINARY_API_SECRET;
-        
-        if (!cloudName || !apiKey || !apiSecret) {
-          throw new Error('Missing Cloudinary configuration');
-        }
-
-        // Extract the public ID from the URL
-        const publicId = url.split('/').slice(-2).join('/').split('.')[0];
-        // const signature = crypto
-        //   .createHash('sha1')
-        //   .update(`public_id=${publicId}&timestamp=${Math.floor(Date.now()/1000)}${apiSecret}`)
-        //   .digest('hex');
-        const signature = createHash('sha1')
-          .update(`public_id=${publicId}&timestamp=${Math.floor(Date.now()/1000)}${apiSecret}`)
-          .digest('hex');
-
-        const signedUrl = `https://res.cloudinary.com/${cloudName}/image/upload/fl_attachment/v1/${publicId}.pdf?api_key=${apiKey}&timestamp=${Math.floor(Date.now()/1000)}&signature=${signature}`;
-
-        const signedResponse = await axios.get(signedUrl, {
-          responseType: 'arraybuffer'
-        });
-
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', 'inline; filename=document.pdf');
-        return res.send(signedResponse.data);
-      } catch (signedError) {
-        console.error('Error with signed URL:', signedError);
-        return res.status(500).send('Error loading document: Authentication failed');
-      }
+    if (uploadIndex === -1) {
+      throw new Error('Invalid Cloudinary URL - missing upload path');
     }
     
-    return res.status(500).send('Error loading document');
+    // Get everything after 'upload', skipping version if present
+    let publicIdParts = pathParts.slice(uploadIndex + 1);
+    
+    // Remove version number (starts with 'v' followed by digits)
+    publicIdParts = publicIdParts.filter(part => !/^v\d+$/.test(part));
+    
+    // Join the parts and remove file extension if present
+    let publicId = publicIdParts.join('/');
+    
+    // Remove .pdf extension if present
+    publicId = publicId.replace(/\.pdf$/, '');
+    
+    return publicId;
+  } catch (error) {
+    console.error('Error extracting public ID from URL:', url);
+    throw new Error('Failed to parse Cloudinary URL');
   }
 }
