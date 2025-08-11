@@ -1,13 +1,14 @@
-/* eslint-disable react/no-unescaped-entities */
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useStore, Course } from '@/store/useStore'
+import { useStore } from '@/store/useStore'
 import { doc, updateDoc, onSnapshot } from 'firebase/firestore'
-import { FiUploadCloud, FiFileText, FiDownload, FiExternalLink, FiFile, FiCheckCircle, FiXCircle, FiFilePlus } from 'react-icons/fi'
+import { FiUploadCloud, FiFileText, FiFile, FiCheckCircle, FiXCircle, FiFilePlus } from 'react-icons/fi'
 import LoadingSpinner from '@/components/ui/loading-spinner'
 import axios from 'axios'
 import { db } from '@/lib/firebase'
+import CourseResources from './view-course'
+import { CourseResource, CourseDocument } from '@/types/course';
 
 // Helper function to get icon based on file type
 const getFileIcon = (mimeType?: string) => {
@@ -27,29 +28,16 @@ const formatFileSize = (sizeInBytes?: number) => {
     return `${sizeInMB.toFixed(2)} MB`;
 };
 
-interface MaterialResource {
-    name: string;
-    url: string;
-    type?: string;
-    size?: number;
-}
-
 export default function ResourcesTab() {
     const { user, currentCourse, authChecked } = useStore();
     const [file, setFile] = useState<File | null>(null);
     const [uploading, setUploading] = useState(false);
-    const [courseResources, setCourseResources] = useState<MaterialResource[]>([]);
     const [loadingResources, setLoadingResources] = useState(true);
     const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+    const [courseResources, setCourseResources] = useState<CourseResource[]>([]);
     
     const canUpload = user && currentCourse && user.uid === currentCourse.userId;
 
-    // This function now generates the URL for your Next.js API route
-    const getDownloadUrl = (url: string, originalName: string, mimeType?: string) => {
-        // Construct the URL to your API route, passing the necessary parameters
-        return `/api/download-material?url=${encodeURIComponent(url)}&name=${encodeURIComponent(originalName)}&type=${encodeURIComponent(mimeType || 'application/octet-stream')}`;
-    };
-    
     useEffect(() => {
         console.log('Frontend: useEffect triggered for resource loading. AuthChecked:', authChecked, 'CurrentCourse ID:', currentCourse?.id);
         if (!authChecked || !currentCourse?.id) {
@@ -63,7 +51,8 @@ export default function ResourcesTab() {
 
         const unsubscribe = onSnapshot(courseDocRef, (docSnap) => {
             if (docSnap.exists()) {
-                const data = docSnap.data() as Course;
+                // const data = docSnap.data() as any;
+                const data = docSnap.data() as CourseDocument;
                 console.log('Frontend: Firestore snapshot received. Materials:', data.materials);
                 setCourseResources(data.materials || []);
                 useStore.setState(state => ({
@@ -100,7 +89,7 @@ export default function ResourcesTab() {
         }
     };
 
-    const uploadFileToCloudinary = async (fileToUpload: File): Promise<MaterialResource | null> => {
+    const uploadFileToCloudinary = async (fileToUpload: File): Promise<CourseResource | null> => {
         console.log('Frontend: Calling /api/upload-material for file:', fileToUpload.name);
         try {
             const formData = new FormData();
@@ -250,57 +239,38 @@ export default function ResourcesTab() {
                 </div>
             )}
 
-            <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
-                <h3 className="p-6 text-xl font-semibold text-gray-800 border-b border-gray-200">Available Materials</h3>
-                {courseResources.length > 0 ? (
-                    <ul className="divide-y divide-gray-200">
-                        {courseResources.map((resource, index) => (
-                            <li key={index} className="px-6 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between hover:bg-gray-50 transition-colors duration-200">
-                                <div className="flex items-center flex-1 min-w-0">
-                                    <div className="p-2 bg-gray-100 rounded-md">
-                                        {getFileIcon(resource.type)}
-                                    </div>
-                                    <div className="ml-4 flex-1 truncate">
-                                        <p className="text-lg font-medium text-gray-900 truncate">{resource.name}</p>
-                                        <p className="text-sm text-gray-500">
-                                            {formatFileSize(resource.size)} {resource.type ? `(${resource.type})` : ''}
-                                        </p>
-                                    </div>
-                                </div>
-                                <div className="flex items-center space-x-2 sm:space-x-4 ml-0 sm:ml-4 mt-4 sm:mt-0 flex-shrink-0">
-                                    {/* The href for the download link now correctly points to your API route with all parameters */}
-                                    <a
-                                        href={getDownloadUrl(resource.url, resource.name, resource.type)}
-                                        download={resource.name}
-                                        className="p-2 text-blue-600 hover:text-blue-800 transition-colors duration-200 rounded-full hover:bg-blue-50"
-                                        title="Download Material"
-                                    >
-                                        <FiDownload className="text-xl" />
-                                    </a>
-                                    {/* The view link still opens the resource directly in a new tab */}
-                                    <a
-                                        href={resource.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="p-2 text-gray-500 hover:text-gray-700 transition-colors duration-200 rounded-full hover:bg-gray-100"
-                                        title="View Material in a new tab"
-                                    >
-                                        <FiExternalLink className="text-xl" />
-                                    </a>
-                                </div>
-                            </li>
-                        ))}
-                    </ul>
-                ) : (
-                    <div className="text-center py-12 px-6 text-gray-500">
-                        <FiFile className="text-6xl mx-auto mb-4 text-gray-300" />
-                        <p className="text-lg font-medium mb-2">No materials have been uploaded yet.</p>
-                        {canUpload && (
-                            <p className="text-sm">Use the "Upload New Material" section above to get started.</p>
-                        )}
-                    </div>
-                )}
-            </div>
+        
+
+                    <CourseResources
+                    courseResources={courseResources.map(resource => {
+                        let url = resource.url || resource.viewerUrl || '';
+
+                        // Ensure Cloudinary upload path exists
+                        if (url.includes('cloudinary.com') && !url.includes('/upload/')) {
+                        const parts = url.split('/');
+                        const cloudNameIndex = parts.findIndex(part => part.includes('cloudinary.com'));
+                        if (cloudNameIndex !== -1) {
+                            parts.splice(cloudNameIndex + 1, 0, 'upload');
+                            url = parts.join('/');
+                        }
+                        }
+
+                        // Add PDF public check
+                        const isPdf = url.toLowerCase().endsWith('.pdf');
+                        const isPublic = url.includes('/upload/'); // basic check
+
+                        return {
+                        ...resource,
+                        url,
+                        isPdf,
+                        isPublic
+                        };
+                    })}
+                    canUpload={!!canUpload}
+                    getFileIcon={getFileIcon}
+                    formatFileSize={formatFileSize}
+                    />
+
         </div>
     );
 }
