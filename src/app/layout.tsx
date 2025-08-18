@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google';
 import './globals.css'; // Your global styles
 import AuthProvider from '@/components/auth/auth-provider'; // Import the AuthProvider
 import AuthRedirector from '@/components/auth/AuthRedirector';
+import HydrationProvider from '@/components/providers/HydrationProvider';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -18,7 +19,9 @@ export default function RootLayout({
       <body className={`${inter.className} transition-colors duration-300`}>
         <AuthProvider>
           <AuthRedirector/>
+          <HydrationProvider>
           {children}
+        </HydrationProvider>
         </AuthProvider>
       </body>
     </html>

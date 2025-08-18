@@ -66,6 +66,7 @@ export default function ProfilePage() {
 
             setUser(updatedUser)
             setLocalName(updatedUser.name || '')
+            // The fix is here: update the local state with the fetched data
             setLocalSchool(updatedUser.school || '')
             setLocalDepartment(updatedUser.department || '')
         } catch (error: unknown) {

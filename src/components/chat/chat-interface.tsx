@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable react/no-unescaped-entities */
 'use client'
 
@@ -6,8 +5,6 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import {
     FiSend,
     FiMessageSquare,
-    FiUser,
-    FiCpu,
     FiPlus,
     FiTrash2,
     FiXCircle,
@@ -16,7 +13,7 @@ import {
 import { getAIResponse } from '@/lib/gemini'
 import LoadingSpinner from '@/components/ui/loading-spinner'
 import { db } from '@/lib/firebase'
-import { collection, doc, setDoc, updateDoc, arrayUnion, Timestamp, query, where, onSnapshot, deleteDoc } from 'firebase/firestore'
+import { collection, doc, setDoc, updateDoc, Timestamp, query, where, onSnapshot, deleteDoc } from 'firebase/firestore'
 import { useStore, ChatMessage, ChatSession } from '@/store/useStore';
 
 interface ChatInterfaceProps {
@@ -43,65 +40,25 @@ export default function ChatInterface({
     const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
     const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
     const [loadingSessions, setLoadingSessions] = useState(true);
-    const [loadingMessages,] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
-    // Auto-scroll to the bottom
+    // Auto-scroll to the bottom whenever messages change
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages]);
 
-    // --- Chat Session Management ---
-
-    useEffect(() => {
-        if (!authChecked || !user?.uid) {
-            setLoadingSessions(false);
-            setChatSessions([]);
-            setCurrentSessionId(null);
-            return;
+    // Memoized functions to prevent re-creation on every render
+    const loadMessagesForSession = useCallback((sessionId: string) => {
+        const session = chatSessions.find(s => s.id === sessionId);
+        if (session) {
+            setMessages(session.messages || []);
+        } else {
+            setMessages([]);
         }
+    }, [chatSessions]);
 
-        setLoadingSessions(true);
-        const q = query(
-            collection(db, 'ai_chat_sessions'),
-            where('userId', '==', user.uid),
-            where('courseId', '==', courseId || null)
-        );
-
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const fetchedSessions: ChatSession[] = snapshot.docs.map(doc => {
-                const data = doc.data();
-                return {
-                    id: doc.id,
-                    userId: data.userId,
-                    courseId: data.courseId || null,
-                    title: data.title,
-                    messages: data.messages || [],
-                    createdAt: data.createdAt instanceof Timestamp ? data.createdAt : Timestamp.fromDate(new Date()),
-                    updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt : Timestamp.fromDate(new Date()),
-                };
-            }).sort((a, b) => b.updatedAt.toMillis() - a.updatedAt.toMillis());
-
-            setChatSessions(fetchedSessions);
-            setLoadingSessions(false);
-
-            if (!currentSessionId || !fetchedSessions.some(s => s.id === currentSessionId)) {
-                if (fetchedSessions.length > 0) {
-                    setCurrentSessionId(fetchedSessions[0].id);
-                } else {
-                    handleNewChat(true);
-                }
-            }
-        }, (error) => {
-            console.error("Error fetching chat sessions:", error);
-            setLoadingSessions(false);
-        });
-
-        return () => unsubscribe();
-    }, [authChecked, user?.uid, courseId, currentSessionId]);
-
-    const updateChatSessionInFirestore = useCallback(async (newMessage: ChatMessage) => {
+    const updateChatSessionInFirestore = useCallback(async (newMessages: ChatMessage[]) => {
         if (!currentSessionId || !user?.uid) {
             console.error("No active session or user not authenticated to update chat.");
             return;
@@ -110,15 +67,16 @@ export default function ChatInterface({
         const sessionDocRef = doc(db, 'ai_chat_sessions', currentSessionId);
         try {
             await updateDoc(sessionDocRef, {
-                messages: arrayUnion(newMessage),
+                messages: newMessages,
                 updatedAt: Timestamp.now(),
             });
         } catch (error) {
             console.error("Error updating chat session in Firestore:", error);
         }
     }, [currentSessionId, user?.uid]);
-
-    const handleNewChat = async (isAutoCreate = false) => {
+    
+    // Memoize handleNewChat
+    const handleNewChat = useCallback(async (isAutoCreate = false) => {
         if (!user?.uid) return;
 
         setIsLoading(true);
@@ -158,7 +116,7 @@ export default function ChatInterface({
                     timestamp: Timestamp.now()
                 };
                 setMessages([greetingMessage]);
-                await updateChatSessionInFirestore(greetingMessage);
+                await setDoc(newSessionRef, { ...newSession, messages: [greetingMessage] });
             }
 
         } catch (error) {
@@ -166,7 +124,7 @@ export default function ChatInterface({
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [user?.uid, chatType, currentCourse?.title, courseId, isSidebarOpen]);
 
     const handleDeleteSession = async (sessionId: string) => {
         if (!user?.uid || !sessionId) return;
@@ -197,9 +155,8 @@ export default function ChatInterface({
         const userMessageContent = input.trim();
         const userMessage: ChatMessage = { role: 'user', content: userMessageContent, timestamp: Timestamp.now() };
 
-        setMessages(prev => [...prev, userMessage]);
-        await updateChatSessionInFirestore(userMessage);
-
+        const updatedMessages = [...messages, userMessage];
+        setMessages(updatedMessages);
         setInput('');
         setIsLoading(true);
 
@@ -212,11 +169,12 @@ export default function ChatInterface({
                 fullAIContext += ` Their role is ${userRole}.`;
             }
 
-            const aiResponseContent = await getAIResponse(userMessage.content, fullAIContext, messages);
+            const aiResponseContent = await getAIResponse(userMessage.content, fullAIContext, updatedMessages);
 
             const assistantMessage: ChatMessage = { role: 'assistant', content: aiResponseContent, timestamp: Timestamp.now() };
-            setMessages(prev => [...prev, assistantMessage]);
-            await updateChatSessionInFirestore(assistantMessage);
+            const finalMessages = [...updatedMessages, assistantMessage];
+            setMessages(finalMessages);
+            await updateChatSessionInFirestore(finalMessages);
 
         } catch (error) {
             console.error('Error getting AI response or saving chat:', error);
@@ -225,12 +183,69 @@ export default function ChatInterface({
                 content: 'Sorry, I encountered an error. Please try again later.',
                 timestamp: Timestamp.now(),
             };
-            setMessages(prev => [...prev, errorMessage]);
-            await updateChatSessionInFirestore(errorMessage);
+            const finalMessagesWithError = [...updatedMessages, errorMessage];
+            setMessages(finalMessagesWithError);
+            await updateChatSessionInFirestore(finalMessagesWithError);
         } finally {
             setIsLoading(false);
         }
     };
+
+    // The main useEffect for Firestore subscription
+    useEffect(() => {
+        if (!authChecked || !user?.uid) {
+            setLoadingSessions(false);
+            setChatSessions([]);
+            setCurrentSessionId(null);
+            return;
+        }
+
+        setLoadingSessions(true);
+        const q = query(
+            collection(db, 'ai_chat_sessions'),
+            where('userId', '==', user.uid),
+            where('courseId', '==', courseId || null)
+        );
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const fetchedSessions: ChatSession[] = snapshot.docs.map(doc => {
+                const data = doc.data();
+                return {
+                    id: doc.id,
+                    userId: data.userId,
+                    courseId: data.courseId || null,
+                    title: data.title,
+                    messages: data.messages || [],
+                    createdAt: data.createdAt instanceof Timestamp ? data.createdAt : Timestamp.fromDate(new Date()),
+                    updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt : Timestamp.fromDate(new Date()),
+                };
+            }).sort((a, b) => b.updatedAt.toMillis() - a.updatedAt.toMillis());
+
+            setChatSessions(fetchedSessions);
+            setLoadingSessions(false);
+
+            if (fetchedSessions.length > 0) {
+                if (!currentSessionId || !fetchedSessions.some(s => s.id === currentSessionId)) {
+                    setCurrentSessionId(fetchedSessions[0].id);
+                }
+            } else if (!currentSessionId) {
+                handleNewChat(true);
+            }
+        }, (error) => {
+            console.error("Error fetching chat sessions:", error);
+            setLoadingSessions(false);
+        });
+
+        return () => unsubscribe();
+    }, [authChecked, user?.uid, courseId, currentSessionId, handleNewChat]);
+
+    // Use a separate useEffect to load messages when currentSessionId changes
+    useEffect(() => {
+        if (currentSessionId && chatSessions.length > 0) {
+            loadMessagesForSession(currentSessionId);
+        }
+    }, [currentSessionId, chatSessions, loadMessagesForSession]);
+
 
     const currentChatTitle = chatSessions.find(s => s.id === currentSessionId)?.title ||
         (chatType === 'course' && currentCourse?.title ? `Chat for ${currentCourse.title}` : "General Chat");
@@ -238,14 +253,14 @@ export default function ChatInterface({
 
 
     return (
-        <div className="flex fixed w-full min-h-screen bg-gray-50 rounded-2xl overflow-hidden">
+        <div className="flex w-full h-screen overflow-hidden bg-gray-50 relative">
 
             {/* Sidebar for Chat History (Responsive) */}
             <div className={`
-                fixed left-0 z-20 w-64 bg-white border-r border-gray-200 flex-col flex-shrink-0
+                fixed top-0 left-0 bottom-0 z-20 w-64 bg-white border-r border-gray-200 flex-col flex-shrink-0
                 transform transition-transform duration-300 ease-in-out
                 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-                md:relative md:translate-x-0 md:w-64 h-screen
+                md:relative md:translate-x-0 md:w-64 h-full
             `}>
                 <div className="p-4 border-b border-gray-200 flex items-center justify-between">
                     <h2 className="text-xl font-bold text-gray-900">Chats</h2>
@@ -312,32 +327,26 @@ export default function ChatInterface({
             </div>
 
             {/* Main Chat Area */}
-            <div className="flex-1 flex flex-col bg-white z-10">
+            <div className="flex-1 flex flex-col relative bg-gray-50">
                 {/* Chat Header */}
-                <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-4 sm:p-6 text-white shadow-md flex-shrink-0 flex items-center">
-                    {/* Mobile-only toggle button for sidebar */}
+                <div className="flex-shrink-0 bg-white p-4 sm:p-6 border-b border-gray-100 shadow-sm flex items-center justify-between">
                     <button onClick={() => setIsSidebarOpen(true)} className="p-2 mr-3 md:hidden">
-                        <FiMenu className="text-2xl" />
+                        <FiMenu className="text-2xl text-gray-700" />
                     </button>
-                    <div className="flex-1">
-                        <h1 className="text-xl sm:text-2xl font-bold flex items-center">
-                            <FiMessageSquare className="mr-3 text-xl sm:text-3xl hidden sm:block" />
-                            {currentChatTitle}
-                        </h1>
-                        <p className="text-sm opacity-90 mt-1 hidden sm:block">{currentChatSubtitle}</p>
+                    <div className="flex items-center flex-1">
+                        <FiMessageSquare className="text-2xl text-blue-600 mr-3 hidden sm:block" />
+                        <div>
+                            <h1 className="text-xl font-bold text-gray-900">{currentChatTitle}</h1>
+                            <p className="text-sm text-gray-500">{currentChatSubtitle}</p>
+                        </div>
                     </div>
                 </div>
 
                 {/* Chat Messages Area */}
-                <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-gray-50">
-                    {loadingMessages ? (
-                        <div className="h-full flex flex-col items-center justify-center text-gray-500 text-center">
-                            <LoadingSpinner />
-                            <p className="mt-3">Loading messages...</p>
-                        </div>
-                    ) : messages.length === 0 ? (
-                        <div className="h-full flex flex-col items-center justify-center text-gray-500 text-center p-4">
-                            <FiMessageSquare size={64} className="mb-4 opacity-30" />
+                <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+                    {messages.length === 0 ? (
+                        <div className="h-full flex flex-col items-center justify-center text-gray-400 text-center">
+                            <FiMessageSquare size={80} className="mb-4" />
                             <p className="text-lg font-medium">Start a conversation with your AI assistant</p>
                             <p className="text-sm mt-1">{placeholder}</p>
                         </div>
@@ -348,91 +357,56 @@ export default function ChatInterface({
                                 className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                             >
                                 <div
-                                    className={`max-w-[80%] p-4 rounded-xl shadow-sm flex items-start space-x-3
+                                    className={`max-w-[75%] p-3 rounded-2xl shadow-sm text-base leading-relaxed
                                         ${message.role === 'user'
-                                            ? 'bg-blue-600 text-white rounded-br-none'
-                                            : 'bg-gray-100 text-gray-800 rounded-bl-none'
+                                            ? 'bg-blue-600 text-white rounded-br-lg'
+                                            : 'bg-gray-200 text-gray-800 rounded-bl-lg'
                                         }`}
                                 >
-                                    {message.role === 'assistant' && <FiCpu className="text-xl mt-1 flex-shrink-0" />}
-                                    <p className="text-base leading-relaxed break-words">{message.content}</p>
-                                    {message.role === 'user' && <FiUser className="text-xl mt-1 flex-shrink-0" />}
+                                    {message.content}
                                 </div>
                             </div>
                         ))
                     )}
                     {isLoading && (
                         <div className="flex justify-start">
-                            <div className="bg-gray-100 text-gray-800 p-4 rounded-xl rounded-bl-none shadow-sm flex items-center space-x-2">
+                            <div className="bg-gray-200 text-gray-800 p-3 rounded-2xl rounded-bl-lg shadow-sm flex items-center space-x-2">
                                 <LoadingSpinner size="sm" />
                                 <span>Thinking...</span>
                             </div>
                         </div>
                     )}
                     <div ref={messagesEndRef} />
-                    <div className="p-4 md:-mt-30 w-full sm:p-6 border-t border-gray-200 bg-transparent flex-shrink-0">
-                        <div className="flex space-x-2 sm:space-x-3 items-center">
-                            <input
-                                type="text"
-                                value={input}
-                                onChange={(e) => setInput(e.target.value)}
-                                onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                                placeholder={placeholder}
-                                className="flex-1 p-2 sm:p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 placeholder-gray-500 transition-colors duration-200"
-                                disabled={isLoading}
-                            />
-                            <button
-                                onClick={handleSendMessage}
-                                disabled={isLoading || !input.trim()}
-                                className="bg-blue-600 hover:bg-blue-700 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg flex items-center justify-center font-semibold shadow-md transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                {isLoading ? (
-                                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                    </svg>
-                                ) : (
-                                    <>
-                                        <FiSend className="sm:mr-2" />
-                                        <span className="hidden sm:block">Send</span>
-                                    </>
-                                )}
-                            </button>
-                        </div>
-                    </div>
                 </div>
 
                 {/* Input Area */}
-                {/* <div className="p-4 sm:p-6 border-t border-gray-200 bg-white flex-shrink-0">
-                    <div className="flex space-x-2 sm:space-x-3 items-center">
+                <div className="p-4 sm:p-6 flex-shrink-0 bg-white border-t border-gray-100">
+                    <div className="relative flex items-center bg-gray-100 rounded-full pl-6 pr-2 py-2 shadow-sm">
                         <input
                             type="text"
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
                             onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
                             placeholder={placeholder}
-                            className="flex-1 p-2 sm:p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 placeholder-gray-500 transition-colors duration-200"
+                            className="flex-1 bg-transparent border-none focus:outline-none text-gray-900 placeholder-gray-500 pr-10"
                             disabled={isLoading}
                         />
                         <button
                             onClick={handleSendMessage}
                             disabled={isLoading || !input.trim()}
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg flex items-center justify-center font-semibold shadow-md transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-full transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {isLoading ? (
-                                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <svg className="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24">
                                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                 </svg>
                             ) : (
-                                <>
-                                    <FiSend className="sm:mr-2" />
-                                    <span className="hidden sm:block">Send</span>
-                                </>
+                                <FiSend size={20} />
                             )}
                         </button>
                     </div>
-                </div> */}
+                </div>
             </div>
         </div>
     );

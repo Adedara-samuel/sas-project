@@ -1,5 +1,6 @@
 // src/types/user.ts
 import { Timestamp } from 'firebase/firestore';
+
 // Define the User interface here, which represents the user data stored in Zustand and Firestore
 export interface User {
     id: string; // Firebase UID
@@ -9,7 +10,7 @@ export interface User {
     displayName: string | null; // From Firebase Auth (e.g., Google sign-in name)
     role: 'admin' | 'student'; // Role must be 'admin' or 'student'
     school: string | null;
-    department: string | null
+    department: string | null
     photoURL: string | null; // Photo URL
     metadata: {
         creationTime: string | undefined;
