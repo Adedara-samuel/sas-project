@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client'
 
-import { useState, useEffect, useMemo } from 'react' // Added useMemo
+import { useState, useEffect, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useStore } from '@/store/useStore'
 import { db } from '@/lib/firebase'
@@ -9,12 +9,12 @@ import { doc, getDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp } from 'f
 import { FiArrowLeft, FiEdit, FiTrash2, FiSave, FiX, FiCheckCircle, FiXCircle, FiBookOpen } from 'react-icons/fi'
 import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm' // Import remarkGfm for Markdown rendering
+import remarkGfm from 'remark-gfm'
 
 // Import SimpleMDE editor and its types
 import SimpleMdeReact from 'react-simplemde-editor';
-import 'easymde/dist/easymde.min.css'; // Import the default styles for SimpleMDE
-import EasyMDE from 'easymde'; // Import EasyMDE for static method calls
+import 'easymde/dist/easymde.min.css';
+import EasyMDE from 'easymde';
 
 // Define the Note and Course interfaces for type safety
 interface Note {
@@ -45,7 +45,7 @@ const LoadingSpinner = () => (
 );
 
 export default function NoteDetailPage() {
-    const { id } = useParams();
+    const params = useParams();
     const router = useRouter();
     const { user, courses } = useStore();
     const [note, setNote] = useState<Note | null>(null);
@@ -59,6 +59,8 @@ export default function NoteDetailPage() {
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
+    const id = params?.id;
+
     // Effect to auto-dismiss messages
     useEffect(() => {
         if (message) {
@@ -70,14 +72,17 @@ export default function NoteDetailPage() {
     }, [message]);
 
     useEffect(() => {
-        const fetchNote = async () => {
-            if (!id || !user?.uid) {
-                setLoading(false);
-                return;
-            }
+        // Handle cases where the id might be an array (for catch-all routes)
+        const noteId = Array.isArray(id) ? id[0] : id;
 
+        if (!noteId || !user?.uid) {
+            setLoading(false);
+            return;
+        }
+
+        const fetchNote = async () => {
             try {
-                const noteDoc = await getDoc(doc(db, 'notes', id as string));
+                const noteDoc = await getDoc(doc(db, 'notes', noteId as string));
                 if (noteDoc.exists() && noteDoc.data().userId === user.uid) {
                     const data = noteDoc.data();
                     const fetchedNote: Note = {
@@ -96,11 +101,11 @@ export default function NoteDetailPage() {
                     });
                 } else {
                     console.warn('Note not found or user does not have permission.');
-                    router.push('/notes'); // Redirect to general notes page
+                    router.push('/notes');
                 }
             } catch (error) {
                 console.error('Error fetching note:', error);
-                router.push('/notes'); // Redirect on error
+                router.push('/notes');
             } finally {
                 setLoading(false);
             }
@@ -130,7 +135,7 @@ export default function NoteDetailPage() {
                 ...note,
                 title: editNote.title,
                 content: editNote.content,
-                updatedAt: new Date() as any // Update local state for immediate feedback
+                updatedAt: new Date() as any
             });
             setIsEditing(false);
             setMessage({ text: 'Note updated successfully!', type: 'success' });
@@ -144,11 +149,11 @@ export default function NoteDetailPage() {
         if (!isOwner || !note) return;
 
         setDeleting(true);
-        setShowDeleteModal(false); // Close modal immediately
+        setShowDeleteModal(false);
         try {
             await deleteDoc(doc(db, 'notes', note.id));
             setMessage({ text: 'Note deleted successfully!', type: 'success' });
-            setTimeout(() => router.push('/notes'), 1500); // Redirect after a short delay
+            setTimeout(() => router.push('/notes'), 1500);
         } catch (error) {
             console.error('Error deleting note:', error);
             setMessage({ text: 'Failed to delete note. Please try again.', type: 'error' });
@@ -266,7 +271,7 @@ export default function NoteDetailPage() {
                                     <button
                                         onClick={() => {
                                             setIsEditing(false);
-                                            setEditNote({ title: note.title, content: note.content }); // Revert changes
+                                            setEditNote({ title: note.title, content: note.content });
                                             setMessage(null);
                                         }}
                                         className="flex items-center px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-semibold transition-all duration-200"
@@ -339,7 +344,6 @@ export default function NoteDetailPage() {
                 )}
             </div>
 
-            {/* Delete Confirmation Modal */}
             {showDeleteModal && (
                 <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center p-4 z-50">
                     <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-sm w-full text-center transform scale-100 transition-transform duration-300">

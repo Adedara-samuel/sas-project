@@ -8,7 +8,7 @@ import {
     FiPlus,
     FiTrash2,
     FiXCircle,
-    FiMenu
+    FiMenu,
 } from 'react-icons/fi'
 import { getAIResponse } from '@/lib/gemini'
 import LoadingSpinner from '@/components/ui/loading-spinner'
@@ -74,7 +74,7 @@ export default function ChatInterface({
             console.error("Error updating chat session in Firestore:", error);
         }
     }, [currentSessionId, user?.uid]);
-    
+
     // Memoize handleNewChat
     const handleNewChat = useCallback(async (isAutoCreate = false) => {
         if (!user?.uid) return;
@@ -260,8 +260,9 @@ export default function ChatInterface({
                 fixed top-0 left-0 bottom-0 z-20 w-64 bg-white border-r border-gray-200 flex-col flex-shrink-0
                 transform transition-transform duration-300 ease-in-out
                 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-                md:relative md:translate-x-0 md:w-64 h-full
+                md:relative md:translate-x-0 md:w-64 h-full mt-15
             `}>
+                {/* Sidebar Header: This should be fixed at the top */}
                 <div className="p-4 border-b border-gray-200 flex items-center justify-between">
                     <h2 className="text-xl font-bold text-gray-900">Chats</h2>
                     <button
@@ -281,6 +282,8 @@ export default function ChatInterface({
                         <FiXCircle className="text-gray-500 text-2xl" />
                     </button>
                 </div>
+
+                {/* Chat Session List: This should be the only scrolling part */}
                 <div className="flex-1 overflow-y-auto py-2">
                     {loadingSessions ? (
                         <div className="flex justify-center items-center h-full text-gray-500">
@@ -301,7 +304,7 @@ export default function ChatInterface({
                                             setIsSidebarOpen(false);
                                         }}
                                         className={`w-full text-left px-4 py-3 text-gray-700 hover:bg-gray-100 transition-colors duration-200 flex items-center justify-between
-                                            ${session.id === currentSessionId ? 'bg-blue-100 text-blue-800 font-semibold' : ''}`}
+                                        ${session.id === currentSessionId ? 'bg-blue-100 text-blue-800 font-semibold' : ''}`}
                                         disabled={isLoading}
                                     >
                                         <span className="truncate pr-8">{session.title}</span>
@@ -327,9 +330,9 @@ export default function ChatInterface({
             </div>
 
             {/* Main Chat Area */}
-            <div className="flex-1 flex flex-col relative bg-gray-50">
+            <div className="flex-1 flex flex-col relative bg-gray-50 ">
                 {/* Chat Header */}
-                <div className="flex-shrink-0 bg-white p-4 sm:p-6 border-b border-gray-100 shadow-sm flex items-center justify-between">
+                <div className="flex-shrink-0 md:mt-10 bg-white p-4 sm:p-6 border-b border-gray-100 shadow-sm flex items-center justify-between">
                     <button onClick={() => setIsSidebarOpen(true)} className="p-2 mr-3 md:hidden">
                         <FiMenu className="text-2xl text-gray-700" />
                     </button>
@@ -344,7 +347,7 @@ export default function ChatInterface({
 
                 {/* Chat Messages Area */}
                 <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
-                    {messages.length === 0 ? (
+                    {messages.length === 0 && !isLoading ? (
                         <div className="h-full flex flex-col items-center justify-center text-gray-400 text-center">
                             <FiMessageSquare size={80} className="mb-4" />
                             <p className="text-lg font-medium">Start a conversation with your AI assistant</p>

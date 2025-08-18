@@ -11,16 +11,25 @@ import { FiArrowLeft, FiBook, FiUser, FiCalendar, FiClock } from 'react-icons/fi
 import Link from 'next/link'
 
 export default function BookDetailPage() {
-    const { id } = useParams()
+    const params = useParams()
     const { user } = useStore()
     const [book, setBook] = useState<any>(null)
     const [loading, setLoading] = useState(true)
     const [borrowing, setBorrowing] = useState(false)
 
+    const id = params?.id
+
+    // Use a useEffect to handle the data fetching
     useEffect(() => {
+        // Type-guard: Check if 'id' exists and is a string
+        if (typeof id !== 'string') {
+            setLoading(false)
+            return
+        }
+
         const fetchBook = async () => {
             try {
-                const bookDoc = await getDoc(doc(db, 'books', id as string))
+                const bookDoc = await getDoc(doc(db, 'books', id))
                 if (bookDoc.exists()) {
                     setBook({
                         id: bookDoc.id,
@@ -36,7 +45,7 @@ export default function BookDetailPage() {
         }
 
         fetchBook()
-    }, [id])
+    }, [id]) // The useEffect dependency is now just the 'id' variable
 
     const handleBorrow = async () => {
         if (!user || !book) return
@@ -96,12 +105,12 @@ export default function BookDetailPage() {
                     </div>
 
                     <div className="md:w-2/3 p-6">
-                        <h1 className="text-2xl font-bold text-gray-900  mb-2">{book.title}</h1>
-                        <p className="text-gray-600  mb-4">by {book.author}</p>
+                        <h1 className="text-2xl font-bold text-gray-900 mb-2">{book.title}</h1>
+                        <p className="text-gray-600 mb-4">by {book.author}</p>
 
                         <div className="flex flex-wrap gap-2 mb-6">
                             {book.category && (
-                                <span className="px-2 py-1 bg-blue-50  text-blue-600  text-xs rounded-full">
+                                <span className="px-2 py-1 bg-blue-50 text-blue-600 text-xs rounded-full">
                                     {book.category}
                                 </span>
                             )}

@@ -16,15 +16,15 @@ export default function AuthRedirector() {
         // Check if user is explicitly null or an object.
         // If it's still undefined (initial Zustand state before AuthContext sets it),
         // then the check isn't complete.
-        if (user !== undefined) { // Assuming your initial user state is `undefined` or `null`
+        if (user !== undefined) {
             setIsAuthCheckComplete(true);
         }
     }, [user]);
 
     // This useEffect handles the actual redirects
     useEffect(() => {
-        if (!isAuthCheckComplete) {
-            // Wait until the initial auth check is done
+        // ADD THIS CHECK: If pathname is null, return early.
+        if (pathname === null || !isAuthCheckComplete) {
             return;
         }
 
@@ -32,6 +32,7 @@ export default function AuthRedirector() {
         const protectedRoutes = ['/dashboard', '/settings', '/profile', '/courses']; // Add all your protected routes
         const publicAuthRoutes = ['/login', '/register', '/forgot-password']; // Add other public auth routes
 
+        // Now, you can safely use pathname
         const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));
         const isPublicAuthRoute = publicAuthRoutes.some(route => pathname.startsWith(route));
 

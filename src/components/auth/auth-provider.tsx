@@ -2,12 +2,12 @@
 'use client';
 
 import { useEffect } from 'react';
-import { onAuthStateChanged, User as FirebaseAuthUser, signOut } from 'firebase/auth'; // Import signOut
+import { onAuthStateChanged, User as FirebaseAuthUser, signOut } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
-import { useStore, User as ZustandUser } from '@/store/useStore';
+import { useStore } from '@/store/useStore'; 
 import { usePathname, useRouter } from 'next/navigation';
 import LoadingSpinner from '@/components/ui/loading-spinner';
-import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore'; // Import Timestamp
+import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore'; 
 import { User as AppUserType } from '@/types/user';
 
 // Define 24 hours in milliseconds
@@ -19,6 +19,12 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     const { user, setUser, authChecked, setAuthChecked, darkMode, language, toggleDarkMode, setLanguage } = useStore();
 
     useEffect(() => {
+        // ADD THIS CHECK: If pathname is null, return early to prevent errors.
+        if (pathname === null) {
+            console.log('AuthProvider: pathname is null, skipping auth check.');
+            return;
+        }
+
         console.log('AuthProvider: Setting up onAuthStateChanged listener.');
 
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseAuthUser | null) => {
@@ -49,7 +55,6 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
                             email: firebaseUser.email,
                             role: userRole,
                             photoURL: firebaseUser.photoURL,
-                            // lastLoginAt will be set on actual login via LoginForm
                         };
                         await setDoc(userDocRef, firestoreData, { merge: true });
                     }
@@ -63,12 +68,9 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
                         console.log(`AuthProvider: Time since last login for ${firebaseUser.uid}: ${timeElapsed / 1000 / 60} minutes.`);
                         if (timeElapsed > TWENTY_FOUR_HOURS_IN_MS) {
                             console.log('AuthProvider: 24 hours elapsed since last login. Forcing logout.');
-                            await signOut(auth); // Force logout
-                            currentUserState = null; // Set state to null immediately
-                            // The onAuthStateChanged listener will fire again with firebaseUser = null
-                            // and handle the redirection to login.
+                            await signOut(auth);
+                            currentUserState = null;
                         } else {
-                            // If session is still valid, construct user state
                             currentUserState = {
                                 id: firebaseUser.uid,
                                 uid: firebaseUser.uid,
@@ -81,12 +83,12 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
                                 },
                                 name: firestoreData.name || firebaseUser.displayName || null,
                                 role: userRole,
+                                school: firestoreData.school || null, 
+                                department: firestoreData.department || null,
                             };
                             console.log("AuthProvider: User profile set in Zustand (session valid):", currentUserState);
                         }
                     } else {
-                        // If lastLoginAt is not set (e.g., very first login after this feature is deployed),
-                        // treat as valid for now, but it will be set on next login.
                         console.warn("AuthProvider: lastLoginAt not found for user. Treating session as valid for now.");
                         currentUserState = {
                             id: firebaseUser.uid,
@@ -100,6 +102,8 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
                             },
                             name: firestoreData.name || firebaseUser.displayName || null,
                             role: userRole,
+                            school: firestoreData.school || null,
+                            department: firestoreData.department || null,
                         };
                     }
 
@@ -118,7 +122,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
             setAuthChecked(true);
             console.log('AuthProvider: authChecked set to true in Zustand.');
 
-            // --- Redirection Logic (Centralized) ---
+            // The pathname is guaranteed to be a string here because of the null check at the start.
             const protectedRoutes = ['/dashboard', '/settings', '/profile', '/courses', '/notes', '/ai'];
             const publicAuthRoutes = ['/login', '/register', '/forgot-password'];
 
@@ -127,14 +131,13 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
             const isHomePage = pathname === '/';
 
             console.log('AuthProvider Redirection Check:');
-            console.log('  - Current Pathname:', pathname);
-            console.log('  - isAuthenticated (currentUserState exists):', !!currentUserState);
-            console.log('  - isProtectedRoute:', isProtectedRoute);
-            console.log('  - isPublicAuthRoute:', isPublicAuthRoute);
-            console.log('  - isHomePage:', isHomePage);
+            console.log('  - Current Pathname:', pathname);
+            console.log('  - isAuthenticated (currentUserState exists):', !!currentUserState);
+            console.log('  - isProtectedRoute:', isProtectedRoute);
+            console.log('  - isPublicAuthRoute:', isPublicAuthRoute);
+            console.log('  - isHomePage:', isHomePage);
 
             if (currentUserState) {
-                // User IS logged in
                 if (isPublicAuthRoute || isHomePage) {
                     console.log('AuthProvider: User logged in and on a public/home route. Redirecting to dashboard.');
                     router.replace('/dashboard');
@@ -142,7 +145,6 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
                     console.log('AuthProvider: User logged in and already on a protected route. No redirect needed.');
                 }
             } else {
-                // User is NOT logged in
                 if (isProtectedRoute) {
                     router.replace('/login');
                 } else {

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 // src/lib/gemini.ts
 
 import { ChatMessage } from '@/store/useStore'; // Import ChatMessage interface

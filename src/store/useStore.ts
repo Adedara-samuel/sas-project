@@ -1,10 +1,11 @@
 // src/store/useStore.ts
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { Timestamp } from 'firebase/firestore';
-import { User } from '../types/user';
+import { Timestamp } from 'firebase/firestore'
+// Import the User type directly from its dedicated types file
+import { User } from '../types/user' 
 
-// Course interface remains the same
+// Keep all other interfaces as they were.
 export interface Course {
     id: string
     title: string
@@ -22,7 +23,6 @@ export interface Course {
     }[];
 }
 
-// Book interface remains the same
 export interface Book {
     id: string
     title: string
@@ -36,7 +36,6 @@ export interface Book {
     createdAt: Date
 }
 
-// Note interface remains the same
 export interface Note {
     id: string
     courseId: string
@@ -47,46 +46,43 @@ export interface Note {
     userId: string
 }
 
-// Schedule interface remains the same
 export interface Schedule {
     id: string
     courseId: string
-    userId: string // Ensure userId is present for security rules
-    title: string; // New: Title for the schedule item (e.g., "Lecture on Calculus", "Homework 1")
-    type: 'Class' | 'Assignment' | 'Exam' | 'Other'; // New: Type of schedule item
-    day: string // e.g., "Monday", "Tuesday"
-    startTime: string // e.g., "09:00"
-    endTime: string // e.g., "10:30"
-    location: string // e.g., "Room 201", "Online"
+    userId: string
+    title: string;
+    type: 'Class' | 'Assignment' | 'Exam' | 'Other';
+    day: string
+    startTime: string
+    endTime: string
+    location: string
     recurring: boolean
     createdAt: Date
-    updatedAt?: Date // Optional: for tracking last update
+    updatedAt?: Date
 }
 
-// Updated Message interface for chat history
 export interface ChatMessage {
-    role: 'user' | 'assistant' | 'file'; // Added 'file' role for temporary file messages
-    content: string; // For text messages
-    fileName?: string; // For file messages
-    fileUrl?: string; // For file messages
-    fileType?: string; // For file messages
-    fileSize?: number; // For file messages
-    timestamp: Timestamp; // To order messages
+    role: 'user' | 'assistant' | 'file';
+    content: string;
+    fileName?: string;
+    fileUrl?: string;
+    fileType?: string;
+    fileSize?: number;
+    timestamp: Timestamp;
 }
 
-// New interface for a chat session document
 export interface ChatSession {
-    id: string; // Document ID
+    id: string;
     userId: string;
-    courseId?: string | null; // Null for general chat
-    title: string; // Display title for the sidebar
+    courseId?: string | null;
+    title: string;
     messages: ChatMessage[];
     createdAt: Timestamp;
     updatedAt: Timestamp;
 }
 
-
 interface StoreState {
+    // The user state now correctly uses the imported User type
     user: User | null
     courses: Course[]
     books: Book[]
