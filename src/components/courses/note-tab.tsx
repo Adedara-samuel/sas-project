@@ -10,11 +10,18 @@ import { db } from '@/lib/firebase'
 import { collection, query, where, onSnapshot, doc, updateDoc, deleteDoc, Timestamp, orderBy, setDoc } from 'firebase/firestore'
 import { FiPlus, FiEdit, FiTrash2, FiSave, FiXCircle, FiFileText, FiCheckCircle } from 'react-icons/fi'
 import LoadingSpinner from '@/components/ui/loading-spinner'
+import dynamic from 'next/dynamic'
 
 // Import SimpleMDE editor and its types
-import SimpleMdeReact from 'react-simplemde-editor';
+const SimpleMdeReact = dynamic(() => import('react-simplemde-editor'), {
+    ssr: false,
+    loading: () => (
+        <div className="h-full border border-gray-300 rounded-lg p-4 bg-gray-50 flex items-center justify-center">
+            <div className="text-gray-500">Loading editor...</div>
+        </div>
+    )
+})
 import 'easymde/dist/easymde.min.css'; // Import the default styles for SimpleMDE
-import EasyMDE from 'easymde'; // Import EasyMDE types for better type safety
 
 export default function NotesTab() {
     const { user, currentCourse, authChecked } = useStore()
@@ -177,33 +184,10 @@ export default function NotesTab() {
     const mdeOptions = useMemo(() => {
         return {
             autofocus: true,
-            spellChecker: false,
-            toolbar: [
-                'bold', 'italic', 'heading', '|',
-                'quote', 'unordered-list', 'ordered-list', '|',
-                'link', 'image', // Image button is here, but custom upload logic is needed for direct uploads
-                {
-                    name: "preview",
-                    action: (editor: EasyMDE) => EasyMDE.togglePreview(editor), // Corrected: Call static method
-                    className: "fa fa-eye no-disable",
-                    title: "Toggle Preview"
-                },
-                {
-                    name: "side-by-side",
-                    action: (editor: EasyMDE) => EasyMDE.toggleSideBySide(editor), // Corrected: Call static method
-                    className: "fa fa-columns no-disable no-mobile",
-                    title: "Toggle Side by Side"
-                },
-                {
-                    name: "fullscreen",
-                    action: (editor: EasyMDE) => EasyMDE.toggleFullScreen(editor), // Corrected: Call static method
-                    className: "fa fa-arrows-alt no-disable no-mobile",
-                    title: "Toggle Fullscreen"
-                },
-                '|', // Separator
-                'guide' // Help guide
-            ],
-            status: false,
+            spellChecker: true, // You had false here, changed to true to match first code.
+            minHeight: '80vh', // Added to match the height of the first code.
+            toolbar: false, // This is the key change to remove the toolbar.
+            status: false, // This is the key change to remove the status bar.
         } as EasyMDE.Options;
     }, []);
 
@@ -224,7 +208,7 @@ export default function NotesTab() {
     }
 
     return (
-        <div className="flex flex-col md:flex-row gap-6 p-4 h-full">
+        <div className="flex flex-col md:flex-row gap-6 h-full">
             {/* Left Column: Note List */}
             <div className="md:w-1/3 bg-white rounded-xl shadow-lg flex flex-col max-h-[calc(100vh-200px)] overflow-hidden">
                 <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
@@ -274,7 +258,7 @@ export default function NotesTab() {
             </div>
 
             {/* Right Column: Note Viewer/Editor */}
-            <div className="md:w-2/3 bg-white rounded-xl shadow-lg flex flex-col h-fit min-h-[500px]">
+            <div className="md:w-2/3 bg-white flex flex-col h-fit min-h-[500px]">
                 {message && (
                     <div className={`mb-4 p-3 rounded-lg flex items-center space-x-2 text-sm ${message.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                         {message.type === 'success' ? <FiCheckCircle className="flex-shrink-0" /> : <FiXCircle className="flex-shrink-0" />}
@@ -290,7 +274,7 @@ export default function NotesTab() {
                     </div>
                 ) : (
                     <div className="flex-1 flex flex-col p-4">
-                        <div className="flex flex-wrap justify-between items-center mb-4 pb-4 gap-2 border-b border-gray-200">
+                        <div className="flex flex-wrap justify-between items-center mb-4 pb-4 gap-2 none">
                             {isEditing ? (
                                 <input
                                     type="text"
@@ -367,7 +351,7 @@ export default function NotesTab() {
                                 value={content}
                                 onChange={setContent}
                                 options={mdeOptions}
-                                className="flex-1 w-full text-gray-800 font-sans leading-relaxed"
+                                className="flex-1 w-full text-gray-800 font-sans border-none"
                             />
                         ) : (
                             <div className="flex-1 overflow-y-auto p-4 prose max-w-none leading-relaxed">

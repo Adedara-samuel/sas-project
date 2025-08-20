@@ -1,0 +1,35 @@
+/* styles/quill-custom.css */
+
+/* Dark theme for Quill toolbar and editor */
+.quill-editor .ql-toolbar.ql-snow,
+.quill-editor .ql-container.ql-snow {
+    background-color: black;
+    border: none;
+    color: white;
+    /* For the text */
+}
+
+/* Style the toolbar icons */
+.quill-editor .ql-toolbar button,
+.quill-editor .ql-toolbar .ql-stroke {
+    color: white;
+    stroke: white;
+}
+
+/* Fix for fill color on some icons */
+.quill-editor .ql-toolbar .ql-fill {
+    fill: white;
+}
+
+/* Style the editor content area */
+.quill-editor .ql-editor {
+    min-height: 400px;
+    font-size: 1rem;
+    line-height: 1.5;
+    color: white;
+}
+
+/* Style the placeholder text */
+.quill-editor .ql-editor.ql-blank::before {
+    color: #a0a0a0;
+}

@@ -211,9 +211,9 @@ export default function ScheduleTab() {
 
     return (
         <div className="bg-gray-50 min-h-screen p-4 md:p-8 lg:p-12">
-            <div className="max-w-4xl mx-auto space-y-8">
+            <div className="max-w-6xl mx-auto space-y-8">
                 <h2 className="text-3xl font-extrabold text-gray-900">Course Schedule</h2>
-                <p className="text-gray-600">
+                <p className="text-gray-600 max-w-2xl">
                     Manage and organize all your course-related events, including classes, assignments, and exams.
                 </p>
 
@@ -225,31 +225,31 @@ export default function ScheduleTab() {
                 )}
 
                 {/* Schedule Summary */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
-                    <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200">
-                        <FiBookOpen className="mx-auto text-4xl text-blue-500 mb-2" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 text-center">
+                    <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-200 transform hover:scale-105 transition-transform duration-300">
+                        <FiBookOpen className="mx-auto text-5xl text-blue-500 mb-2" />
                         <p className="text-lg font-semibold text-gray-900">Classes</p>
-                        <p className="text-3xl font-bold text-blue-600">{classCount}</p>
+                        <p className="text-4xl font-extrabold text-blue-600 mt-1">{classCount}</p>
                     </div>
-                    <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200">
-                        <FiEdit className="mx-auto text-4xl text-purple-500 mb-2" />
+                    <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-200 transform hover:scale-105 transition-transform duration-300">
+                        <FiEdit className="mx-auto text-5xl text-purple-500 mb-2" />
                         <p className="text-lg font-semibold text-gray-900">Assignments</p>
-                        <p className="text-3xl font-bold text-purple-600">{assignmentCount}</p>
+                        <p className="text-4xl font-extrabold text-purple-600 mt-1">{assignmentCount}</p>
                     </div>
-                    <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200">
-                        <FiCalendar className="mx-auto text-4xl text-red-500 mb-2" />
+                    <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-200 transform hover:scale-105 transition-transform duration-300">
+                        <FiCalendar className="mx-auto text-5xl text-red-500 mb-2" />
                         <p className="text-lg font-semibold text-gray-900">Exams</p>
-                        <p className="text-3xl font-bold text-red-600">{examCount}</p>
+                        <p className="text-4xl font-extrabold text-red-600 mt-1">{examCount}</p>
                     </div>
                 </div>
 
                 {/* Add/Edit Schedule Form */}
                 {(isAdding || editingScheduleId) && (
                     <div className="bg-white p-6 rounded-xl shadow-lg border border-blue-200">
-                        <h3 className="text-xl font-semibold text-gray-800 mb-4">
+                        <h3 className="text-2xl font-semibold text-gray-800 mb-6">
                             {editingScheduleId ? 'Edit Schedule Item' : 'Add New Schedule Item'}
                         </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
                             <div className="col-span-1 lg:col-span-2">
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
                                 <input
@@ -257,7 +257,7 @@ export default function ScheduleTab() {
                                     name="title"
                                     value={formInput.title}
                                     onChange={handleFormChange}
-                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-gray-800"
+                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-gray-800 transition-colors"
                                     required
                                 />
                             </div>
@@ -267,7 +267,7 @@ export default function ScheduleTab() {
                                     name="type"
                                     value={formInput.type}
                                     onChange={handleFormChange}
-                                    className="w-full p-3 border border-gray-300 text-gray-800 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-white"
+                                    className="w-full p-3 border border-gray-300 text-gray-800 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-white transition-colors"
                                     required
                                 >
                                     <option value="Class">Class</option>
@@ -282,7 +282,7 @@ export default function ScheduleTab() {
                                     name="day"
                                     value={formInput.day}
                                     onChange={handleFormChange}
-                                    className="w-full p-3 border border-gray-300 text-gray-800 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-white"
+                                    className="w-full p-3 border border-gray-300 text-gray-800 rounded-lg focus:ring-blue-500 focus:border-blue-500 bg-white transition-colors"
                                     required
                                 >
                                     {DAYS_OF_WEEK.map(day => (
@@ -290,7 +290,7 @@ export default function ScheduleTab() {
                                     ))}
                                 </select>
                             </div>
-                            <div className="flex space-x-2">
+                            <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4 col-span-1 md:col-span-2 lg:col-span-3">
                                 <div className="flex-1">
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Start Time *</label>
                                     <input
@@ -298,7 +298,7 @@ export default function ScheduleTab() {
                                         name="startTime"
                                         value={formInput.startTime}
                                         onChange={handleFormChange}
-                                        className="w-full p-3 border text-gray-800 border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                                        className="w-full p-3 border text-gray-800 border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition-colors"
                                         required
                                     />
                                 </div>
@@ -309,22 +309,22 @@ export default function ScheduleTab() {
                                         name="endTime"
                                         value={formInput.endTime}
                                         onChange={handleFormChange}
-                                        className="w-full p-3 border text-gray-800 border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                                        className="w-full p-3 border text-gray-800 border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition-colors"
                                         required
                                     />
                                 </div>
                             </div>
-                            <div className="col-span-1 lg:col-span-2">
+                            <div className="col-span-1 md:col-span-2 lg:col-span-3">
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
                                 <input
                                     type="text"
                                     name="location"
                                     value={formInput.location}
                                     onChange={handleFormChange}
-                                    className="w-full p-3 border text-gray-800 border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                                    className="w-full p-3 border text-gray-800 border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition-colors"
                                 />
                             </div>
-                            <div className="col-span-1 flex items-center">
+                            <div className="col-span-1 md:col-span-2 lg:col-span-3 flex items-center mt-2">
                                 <input
                                     type="checkbox"
                                     name="recurring"
@@ -335,21 +335,21 @@ export default function ScheduleTab() {
                                 <label className="ml-3 block text-sm text-gray-900">Recurring Event</label>
                             </div>
                         </div>
-                        <div className="flex justify-end space-x-3">
+                        <div className="flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-5 space-y-5 sm:space-y-6 gap-4 mt-6">
                             <button
                                 onClick={() => { setIsAdding(false); setEditingScheduleId(null); setMessage(null); }}
-                                className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-5 py-2.5 rounded-lg flex items-center font-semibold transition-colors duration-200"
+                                className="w-full sm:w-auto bg-gray-200 hover:bg-gray-300 text-gray-700 px-5 py-2.5 rounded-lg flex items-center justify-center font-semibold transition-colors duration-200"
                                 disabled={loading}
                             >
                                 <FiXCircle className="mr-2 text-lg" /> Cancel
                             </button>
                             <button
                                 onClick={handleAddOrUpdateSchedule}
-                                className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg flex items-center font-semibold shadow-md transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg flex items-center justify-center font-semibold shadow-md transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                                 disabled={loading}
                             >
                                 {loading ? (
-                                    <LoadingSpinner size="sm"/>
+                                    <LoadingSpinner size="sm" />
                                 ) : (
                                     <FiSave className="mr-2 text-lg" />
                                 )}
@@ -364,10 +364,10 @@ export default function ScheduleTab() {
                     {!isAdding && !editingScheduleId && (
                         <div className="p-6 border-b border-gray-200">
                             <button
-                                onClick={() => setIsAdding(true)}
+                                onClick={() => { setIsAdding(true); setMessage(null); }}
                                 className="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg flex items-center justify-center font-semibold shadow-sm transition-colors duration-200"
                             >
-                                <FiPlus className="mr-2 text-lg" /> Add New Schedule Item
+                                <FiPlus className="mr-2 text-lg" /> Add Schedule
                             </button>
                         </div>
                     )}
@@ -384,11 +384,11 @@ export default function ScheduleTab() {
                                 <li key={schedule.id} className="p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between hover:bg-gray-50 transition-colors duration-200">
                                     <div className="flex-1 min-w-0 mb-4 sm:mb-0 sm:mr-4">
                                         <div className="flex items-center space-x-3">
-                                            {schedule.type === 'Class' && <FiBookOpen className="flex-shrink-0 text-2xl text-blue-600" />}
-                                            {schedule.type === 'Assignment' && <FiEdit className="flex-shrink-0 text-2xl text-purple-600" />}
-                                            {schedule.type === 'Exam' && <FiCalendar className="flex-shrink-0 text-2xl text-red-600" />}
-                                            {schedule.type === 'Other' && <FiClock className="flex-shrink-0 text-2xl text-gray-600" />}
-                                            <p className="text-xl font-bold text-gray-900 truncate">{schedule.title}</p>
+                                            {schedule.type === 'Class' && <FiBookOpen className="flex-shrink-0 text-xl md:text-2xl text-blue-600" />}
+                                            {schedule.type === 'Assignment' && <FiEdit className="flex-shrink-0 text-xl md:text-2xl text-purple-600" />}
+                                            {schedule.type === 'Exam' && <FiCalendar className="flex-shrink-0 text-xl md:text-2xl text-red-600" />}
+                                            {schedule.type === 'Other' && <FiClock className="flex-shrink-0 text-xl md:text-2xl text-gray-600" />}
+                                            <p className="text-lg md:text-xl font-bold text-gray-900 truncate">{schedule.title}</p>
                                         </div>
                                         <div className="mt-2 text-sm text-gray-600 space-y-1">
                                             <p className="flex items-center"><FiClock className="mr-2 text-gray-400" /> {schedule.day}, {schedule.startTime} - {schedule.endTime}</p>
@@ -400,7 +400,7 @@ export default function ScheduleTab() {
                                             <span className="text-xs text-blue-500 mt-2 inline-block bg-blue-100 px-2 py-1 rounded-full font-medium">Recurring</span>
                                         )}
                                     </div>
-                                    <div className="flex space-x-3 items-center flex-shrink-0">
+                                    <div className="flex space-x-3 items-center flex-shrink-0 mt-4 sm:mt-0">
                                         <button
                                             onClick={() => handleEditClick(schedule)}
                                             className="text-blue-600 hover:text-blue-800 p-2 rounded-full hover:bg-blue-50 transition-colors duration-200"
