@@ -1,9 +1,8 @@
 // src/store/useStore.ts
+import { Timestamp } from 'firebase/firestore'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { Timestamp } from 'firebase/firestore'
-// Import the User type directly from its dedicated types file
-import { User } from '../types/user' 
+import { User } from '../types/user'
 
 // Keep all other interfaces as they were.
 export interface Course {

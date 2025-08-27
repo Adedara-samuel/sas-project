@@ -1,40 +1,72 @@
+/* eslint-disable react-hooks/exhaustive-deps */
+// NotesTab.tsx
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable react/no-unescaped-entities */
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import { useState, useEffect } from 'react'
 import { useStore, Note } from '@/store/useStore'
 import { db } from '@/lib/firebase'
 import { collection, query, where, onSnapshot, doc, updateDoc, deleteDoc, Timestamp, orderBy, setDoc } from 'firebase/firestore'
-import { FiPlus, FiEdit, FiTrash2, FiSave, FiXCircle, FiFileText, FiCheckCircle } from 'react-icons/fi'
+import { FiPlus, FiEdit, FiTrash2, FiXCircle, FiFileText, FiCheckCircle, FiMoreHorizontal, FiVolume2, FiStopCircle } from 'react-icons/fi'
 import LoadingSpinner from '@/components/ui/loading-spinner'
-import dynamic from 'next/dynamic'
-
-// Import SimpleMDE editor and its types
-const SimpleMdeReact = dynamic(() => import('react-simplemde-editor'), {
-    ssr: false,
-    loading: () => (
-        <div className="h-full border border-gray-300 rounded-lg p-4 bg-gray-50 flex items-center justify-center">
-            <div className="text-gray-500">Loading editor...</div>
-        </div>
-    )
-})
-import 'easymde/dist/easymde.min.css'; // Import the default styles for SimpleMDE
+import { useEditor, EditorContent } from '@tiptap/react'
+import StarterKit from '@tiptap/starter-kit'
+import { FaRegCheckSquare, FaCamera, FaPencilAlt } from 'react-icons/fa';
+import { HiOutlineDotsCircleHorizontal } from "react-icons/hi";
+import useDebounce from '@/hooks/useDebounce';
+import parse from 'html-react-parser';
 
 export default function NotesTab() {
     const { user, currentCourse, authChecked } = useStore()
     const [notes, setNotes] = useState<Note[]>([])
     const [activeNote, setActiveNote] = useState<Note | null>(null)
-    const [content, setContent] = useState('')
     const [title, setTitle] = useState('')
+    const [content, setContent] = useState('')
     const [isEditing, setIsEditing] = useState(false)
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
     const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+    const [isSpeaking, setIsSpeaking] = useState(false);
+    const [isUserStopping, setIsUserStopping] = useState(false); // New state to track user's stop action
 
-    // --- Real-time Fetching of Notes for Current Course & User ---
+    const [localTitle, setLocalTitle] = useState('');
+    const [localContent, setLocalContent] = useState('');
+    const debouncedTitle = useDebounce(localTitle, 500);
+    const debouncedContent = useDebounce(localContent, 500);
+
+    const editor = useEditor({
+        extensions: [
+            StarterKit,
+        ],
+        content: localContent,
+        onUpdate: ({ editor }) => {
+            setLocalContent(editor.getHTML());
+        },
+        editorProps: {
+            attributes: {
+                class: 'prose max-w-none focus:outline-none w-full h-full'
+            },
+        },
+        immediatelyRender: false,
+    });
+
+    useEffect(() => {
+        setTitle(debouncedTitle);
+    }, [debouncedTitle]);
+
+    useEffect(() => {
+        if (editor) {
+            setContent(debouncedContent);
+        }
+    }, [debouncedContent, editor]);
+
+    useEffect(() => {
+        if (editor && content !== editor.getHTML()) {
+            editor.commands.setContent(content, { emitUpdate: false });
+        }
+    }, [content, editor]);
+
     useEffect(() => {
         if (!authChecked || !user?.uid || !currentCourse?.id) {
             setLoading(false);
@@ -77,8 +109,8 @@ export default function NotesTab() {
                 const currentActive = fetchedNotes.find(n => n.id === activeNote.id);
                 if (currentActive && (currentActive.title !== title || currentActive.content !== content)) {
                     if (!isEditing) {
-                        setTitle(currentActive.title);
-                        setContent(currentActive.content);
+                        setLocalTitle(currentActive.title);
+                        setLocalContent(currentActive.content);
                     }
                 }
             }
@@ -89,28 +121,26 @@ export default function NotesTab() {
         });
 
         return () => unsubscribe();
-    }, [authChecked, user?.uid, currentCourse?.id, activeNote, isEditing, title, content]);
+    }, [authChecked, user?.uid, currentCourse?.id, activeNote, isEditing]);
 
-    // Update form fields when active note changes (only when not editing)
     useEffect(() => {
         if (!isEditing) {
             if (activeNote) {
-                setTitle(activeNote.title);
-                setContent(activeNote.content);
+                setLocalTitle(activeNote.title);
+                setLocalContent(activeNote.content);
             } else {
-                setTitle('');
-                setContent('');
+                setLocalTitle('');
+                setLocalContent('');
             }
         }
     }, [activeNote, isEditing]);
-
 
     const handleSaveNote = async () => {
         if (!user?.uid || !currentCourse?.id) {
             setMessage({ text: 'Authentication or course data missing. Cannot save note.', type: 'error' });
             return;
         }
-        if (!content.trim()) {
+        if (!editor?.getText()?.trim()) {
             setMessage({ text: 'Note content is required.', type: 'error' });
             return;
         }
@@ -119,11 +149,11 @@ export default function NotesTab() {
         setMessage(null);
 
         try {
-            const finalTitle = title.trim() || 'Untitled';
+            const finalTitle = localTitle.trim() || 'Untitled';
 
             const noteData = {
                 title: finalTitle,
-                content: content.trim(),
+                content: editor?.getHTML() || '',
                 courseId: currentCourse.id,
                 userId: user.uid,
                 updatedAt: Timestamp.now()
@@ -174,22 +204,65 @@ export default function NotesTab() {
 
     const handleNewNoteClick = () => {
         setActiveNote(null);
-        setTitle('');
-        setContent('');
+        setLocalTitle('');
+        setLocalContent('');
         setIsEditing(true);
         setMessage(null);
     };
 
-    // Use useMemo to memoize options to prevent unnecessary re-renders of SimpleMdeReact
-    const mdeOptions = useMemo(() => {
-        return {
-            autofocus: true,
-            spellChecker: true, // You had false here, changed to true to match first code.
-            minHeight: '80vh', // Added to match the height of the first code.
-            toolbar: false, // This is the key change to remove the toolbar.
-            status: false, // This is the key change to remove the status bar.
-        } as EasyMDE.Options;
-    }, []);
+    const handleTextToSpeech = () => {
+        if (!window.speechSynthesis) {
+            setMessage({ text: "Your browser doesn't support Text-to-Speech.", type: 'error' });
+            return;
+        }
+
+        if (!activeNote) {
+            setMessage({ text: 'No note selected to read.', type: 'error' });
+            return;
+        }
+        
+        setMessage(null); // Clear any previous messages
+
+        // If already speaking, stop the speech
+        if (window.speechSynthesis.speaking) {
+            setIsUserStopping(true); // Mark as a user-initiated stop
+            window.speechSynthesis.cancel();
+            setIsSpeaking(false);
+            setMessage({ text: 'Speech stopped.', type: 'success' }); // Provide a stop message
+            return;
+        }
+
+        // Clean the HTML content to get plain text
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(activeNote.content, 'text/html');
+        const cleanText = doc.body.textContent || "";
+
+        if (!cleanText.trim()) {
+            setMessage({ text: 'Note has no readable content.', type: 'error' });
+            return;
+        }
+
+        const utterance = new SpeechSynthesisUtterance(cleanText);
+
+        utterance.onend = () => {
+            setIsSpeaking(false);
+            setIsUserStopping(false); // Reset the stop flag
+            setMessage(null); // Clear the message when speech ends naturally
+        };
+
+        utterance.onerror = (event) => {
+            if (!isUserStopping) { // Only show error if it wasn't a user-initiated stop
+                console.error('SpeechSynthesis Utterance Error:', event.error);
+                setMessage({ text: 'Text-to-Speech failed. Please try again.', type: 'error' });
+            }
+            setIsSpeaking(false);
+            setIsUserStopping(false);
+        };
+
+        // Start the speech
+        setIsSpeaking(true);
+        window.speechSynthesis.speak(utterance);
+    };
 
     if (!currentCourse) {
         return (
@@ -244,12 +317,9 @@ export default function NotesTab() {
                                         }`}
                                 >
                                     <h4 className="text-lg font-medium truncate">{note.title}</h4>
-                                    <p className="text-sm truncate mt-1 text-gray-500">
-                                        {note.content.substring(0, 70)}{note.content.length > 70 ? '...' : ''}
-                                    </p>
-                                    <p className="text-xs text-gray-400 mt-2">
-                                        Updated: {note.updatedAt.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
-                                    </p>
+                                    <div className="prose text-sm mt-1 text-gray-500 max-h-12 overflow-hidden">
+                                        {parse(note.content || '...')}
+                                    </div>
                                 </li>
                             ))}
                         </ul>
@@ -259,109 +329,104 @@ export default function NotesTab() {
 
             {/* Right Column: Note Viewer/Editor */}
             <div className="md:w-2/3 bg-white flex flex-col h-fit min-h-[500px]">
-                {message && (
-                    <div className={`mb-4 p-3 rounded-lg flex items-center space-x-2 text-sm ${message.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                        {message.type === 'success' ? <FiCheckCircle className="flex-shrink-0" /> : <FiXCircle className="flex-shrink-0" />}
-                        <span>{message.text}</span>
-                    </div>
-                )}
-
-                {!activeNote && !isEditing ? (
-                    <div className="flex-1 flex flex-col items-center justify-center text-gray-400 text-center">
-                        <FiFileText size={80} className="mb-4" />
-                        <p className="text-xl font-medium">Select a note or create a new one</p>
-                        <p className="text-sm mt-2">Your notes will appear here.</p>
-                    </div>
-                ) : (
-                    <div className="flex-1 flex flex-col p-4">
-                        <div className="flex flex-wrap justify-between items-center mb-4 pb-4 gap-2 none">
-                            {isEditing ? (
-                                <input
-                                    type="text"
-                                    value={title}
-                                    onChange={(e) => setTitle(e.target.value)}
-                                    placeholder="Note title"
-                                    className="flex-1 text-2xl font-bold text-gray-900 p-2 border-b-2 border-gray-300 focus:border-blue-500 outline-none transition-colors min-w-0"
-                                />
-                            ) : (
-                                <h3 className="text-2xl font-bold text-gray-900">{activeNote?.title}</h3>
-                            )}
-                            <div className="flex space-x-2 ml-auto">
-                                {isEditing ? (
-                                    <>
-                                        <button
-                                            onClick={() => {
-                                                setIsEditing(false);
-                                                if (activeNote) {
-                                                    setTitle(activeNote.title);
-                                                    setContent(activeNote.content);
-                                                } else {
-                                                    setTitle('');
-                                                    setContent('');
-                                                }
-                                                setMessage(null);
-                                            }}
-                                            className="p-2 border border-gray-300 text-gray-700 rounded-lg flex items-center hover:bg-gray-100 transition-colors"
-                                            disabled={saving}
-                                            title="Cancel"
-                                        >
-                                            <FiXCircle className="text-lg" />
-                                            <span className="hidden sm:inline ml-1">Cancel</span>
-                                        </button>
-                                        <button
-                                            onClick={handleSaveNote}
-                                            className="p-2 bg-blue-600 text-white rounded-lg flex items-center hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                            disabled={saving || !content.trim()}
-                                            title={activeNote ? 'Update' : 'Save'}
-                                        >
-                                            {saving ? (
-                                                <LoadingSpinner size="sm" />
-                                            ) : (
-                                                <FiSave className="text-lg" />
-                                            )}
-                                            <span className="hidden sm:inline ml-1">{activeNote ? 'Update' : 'Save'}</span>
-                                        </button>
-                                    </>
-                                ) : (
-                                    <>
-                                        <button
-                                            onClick={() => setIsEditing(true)}
-                                            className="p-2 border border-blue-600 text-blue-600 rounded-lg flex items-center hover:bg-blue-50 transition-colors"
-                                            title="Edit"
-                                        >
-                                            <FiEdit className="text-lg" />
-                                            <span className="hidden sm:inline ml-1">Edit</span>
-                                        </button>
-                                        <button
-                                            onClick={() => activeNote && handleDeleteNote(activeNote.id)}
-                                            className="p-2 border border-red-600 text-red-600 rounded-lg flex items-center hover:bg-red-50 transition-colors"
-                                            disabled={saving}
-                                            title="Delete"
-                                        >
-                                            <FiTrash2 className="text-lg" />
-                                            <span className="hidden sm:inline ml-1">Delete</span>
-                                        </button>
-                                    </>
-                                )}
-                            </div>
-                        </div>
-
+                {/* Header */}
+                <div className="flex-shrink-0 flex items-center justify-between p-4 bg-white border-b border-gray-200">
+                    <div className="flex-1 text-center font-bold text-gray-800">
                         {isEditing ? (
-                            <SimpleMdeReact
-                                value={content}
-                                onChange={setContent}
-                                options={mdeOptions}
-                                className="flex-1 w-full text-gray-800 font-sans border-none"
+                            <input
+                                type="text"
+                                value={localTitle}
+                                onChange={(e) => setLocalTitle(e.target.value)}
+                                placeholder="Note title"
+                                className="w-full text-center text-lg font-bold placeholder-gray-400 focus:outline-none"
                             />
                         ) : (
-                            <div className="flex-1 overflow-y-auto p-4 prose max-w-none leading-relaxed">
-                                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                    {activeNote?.content || 'Select a note to view its content.'}
-                                </ReactMarkdown>
-                            </div>
+                            <h3 className="text-2xl font-bold text-gray-900">{activeNote?.title || 'No Note Selected'}</h3>
                         )}
                     </div>
-                )}
+                    <div className="text-gray-500 flex items-center space-x-4">
+                        {/* Text-to-Speech Button */}
+                        {activeNote && !isEditing && (
+                            <button
+                                onClick={handleTextToSpeech}
+                                className="p-2 border border-purple-600 text-purple-600 rounded-full flex items-center hover:bg-purple-50 transition-colors"
+                                title={isSpeaking ? 'Stop Reading' : 'Read Note'}
+                            >
+                                {isSpeaking ? <FiStopCircle className="text-lg" /> : <FiVolume2 className="text-lg" />}
+                            </button>
+                        )}
+                        {isEditing ? (
+                            <button
+                                onClick={handleSaveNote}
+                                disabled={!editor?.getText()?.trim() || saving}
+                                className="p-2 bg-blue-600 text-white rounded-full flex items-center hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                title={activeNote ? 'Update' : 'Save'}
+                            >
+                                <svg className={`h-5 w-5 ${saving ? 'animate-spin' : ''}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    {saving ? <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path> : <path className="opacity-75" fill="currentColor" d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"></path>}
+                                </svg>
+                            </button>
+                        ) : (
+                            <>
+                                {activeNote && (
+                                    <button
+                                        onClick={() => setIsEditing(true)}
+                                        className="p-2 border border-blue-600 text-blue-600 rounded-full flex items-center hover:bg-blue-50 transition-colors"
+                                        title="Edit"
+                                    >
+                                        <FiEdit className="text-lg" />
+                                    </button>
+                                )}
+                                {activeNote && (
+                                    <button
+                                        onClick={() => activeNote && handleDeleteNote(activeNote.id)}
+                                        className="p-2 border border-red-600 text-red-600 rounded-full flex items-center hover:bg-red-50 transition-colors"
+                                        disabled={saving}
+                                        title="Delete"
+                                    >
+                                        <FiTrash2 className="text-lg" />
+                                    </button>
+                                )}
+                            </>
+                        )}
+                        <HiOutlineDotsCircleHorizontal className="text-xl cursor-pointer" />
+                    </div>
+                </div>
+
+                {/* Main Content Area (Scrollable) */}
+                <div className="flex-1 overflow-y-auto p-4 bg-white">
+                    {message && (
+                        <div className={`mb-4 p-3 rounded-lg flex items-center space-x-2 text-sm ${message.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                            {message.type === 'success' ? <FiCheckCircle className="flex-shrink-0" /> : <FiXCircle className="flex-shrink-0" />}
+                            <span>{message.text}</span>
+                        </div>
+                    )}
+
+                    {!activeNote && !isEditing ? (
+                        <div className="flex-1 flex flex-col items-center justify-center text-gray-400 text-center">
+                            <FiFileText size={80} className="mb-4" />
+                            <p className="text-xl font-medium">Select a note or create a new one</p>
+                            <p className="text-sm mt-2">Your notes will appear here.</p>
+                        </div>
+                    ) : (
+                        <>
+                            {isEditing ? (
+                                <EditorContent editor={editor} className="h-full text-gray-700" />
+                            ) : (
+                                <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: activeNote?.content || '' }} />
+                            )}
+                        </>
+                    )}
+                </div>
+
+                {/* Bottom Toolbar */}
+                <div className="flex-shrink-0 flex items-center justify-around text-gray-500 p-4 bg-white border-t border-gray-200">
+                    <FaRegCheckSquare className="text-xl cursor-pointer" />
+                    <FaCamera className="text-xl cursor-pointer" />
+                    <FiMoreHorizontal className="text-xl cursor-pointer" />
+                    <FaPencilAlt className="text-xl cursor-pointer" />
+                </div>
             </div>
         </div>
     );

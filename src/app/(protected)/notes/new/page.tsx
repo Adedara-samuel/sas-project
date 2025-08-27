@@ -7,32 +7,45 @@ import { db } from '@/lib/firebase'
 import { doc, setDoc, serverTimestamp, collection } from 'firebase/firestore'
 import { FiArrowLeft, FiMoreHorizontal } from 'react-icons/fi'
 import Link from 'next/link'
-import dynamic from 'next/dynamic'
 import { FaRegCheckSquare, FaCamera, FaPencilAlt } from 'react-icons/fa';
 import { HiOutlineDotsCircleHorizontal } from "react-icons/hi";
 
-// Use react-simplemde-editor instead
-const SimpleMDE = dynamic(() => import('react-simplemde-editor'), {
-    ssr: false,
-    loading: () => (
-        <div className="h-64 border border-gray-300 rounded-lg p-4 bg-gray-50 flex items-center justify-center">
-            <div className="text-gray-500">Loading editor...</div>
-        </div>
-    )
-})
-import 'easymde/dist/easymde.min.css'
+// Import Tiptap components
+import { useEditor, EditorContent } from '@tiptap/react'
+import StarterKit from '@tiptap/starter-kit'
 
 export default function NewNotePage() {
     const { user, currentCourse, authChecked } = useStore()
     const router = useRouter()
-    const [note, setNote] = useState({
-        title: '',
-        content: ''
-    })
+    const [title, setTitle] = useState('')
+    const [content, setContent] = useState('')
     const [saving, setSaving] = useState(false)
     const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
 
-    // Effect to auto-dismiss success/error messages
+    // Initialize the Tiptap editor
+    const editor = useEditor({
+        extensions: [
+            StarterKit,
+        ],
+        content: content,
+        onUpdate: ({ editor }) => {
+            setContent(editor.getHTML()) // Tiptap saves content as HTML
+        },
+        editorProps: {
+            attributes: {
+                // Corrected line: removed 'prose' classes to fill the whole area
+                class: 'focus:outline-none w-full h-full'
+            },
+        },
+        immediatelyRender: false,
+    })
+
+    useEffect(() => {
+        if (editor && content && editor.isEmpty) {
+            editor.commands.setContent(content, { emitUpdate: false })
+        }
+    }, [content, editor])
+    
     useEffect(() => {
         if (message) {
             const timer = setTimeout(() => {
@@ -53,7 +66,7 @@ export default function NewNotePage() {
             return
         }
 
-        if (!note.content.trim()) {
+        if (!editor?.getText()?.trim()) {
             setMessage({ text: 'Content is required.', type: 'error' })
             return
         }
@@ -62,11 +75,11 @@ export default function NewNotePage() {
         setMessage(null)
 
         try {
-            const title = note.title.trim() || 'Untitled'
+            const noteTitle = title.trim() || 'Untitled'
             
             const noteData = {
-                title: title,
-                content: note.content.trim(),
+                title: noteTitle,
+                content: editor.getHTML(),
                 courseId: currentCourse?.id || '',
                 userId: user.uid,
                 createdAt: serverTimestamp(),
@@ -94,7 +107,6 @@ export default function NewNotePage() {
 
     return (
         <div className="min-h-screen bg-gray-100 flex flex-col">
-
             {/* Header */}
             <div className="flex-shrink-0 flex items-center justify-between p-4 bg-white border-b border-gray-200">
                 <Link href="/notes" className="flex items-center text-blue-500 hover:text-blue-700 transition-colors duration-200">
@@ -104,8 +116,8 @@ export default function NewNotePage() {
                 <div className="flex-1 text-center font-bold text-gray-800">
                     <input
                         type="text"
-                        value={note.title}
-                        onChange={(e) => setNote({ ...note, title: e.target.value })}
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
                         placeholder="Title"
                         className="w-full text-center text-lg font-bold placeholder-gray-400 focus:outline-none"
                     />
@@ -113,7 +125,7 @@ export default function NewNotePage() {
                 <div className="text-gray-500 flex items-center space-x-4">
                     <button
                         onClick={handleSave}
-                        disabled={!note.content.trim() || saving || !authChecked || !user?.uid}
+                        disabled={!editor?.getText()?.trim() || saving || !authChecked || !user?.uid}
                         className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-full transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <svg className={`h-5 w-5 ${saving ? 'animate-spin' : ''}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -127,21 +139,8 @@ export default function NewNotePage() {
 
             {/* Main Content Area (Scrollable) */}
             <div className="flex-1 overflow-y-auto p-4 bg-white">
-                <SimpleMDE
-                    // I have removed the border by adding a !important rule in a style block
-                    className='text-gray-700 m-0'
-                    value={note.content}
-                    onChange={(value) => setNote({ ...note, content: value })}
-                    options={{
-                        placeholder: 'Write your note here...',
-                        spellChecker: true,
-                        status: false,
-                        minHeight: '80vh',
-                        toolbar: false,
-                    }}
-                />
+                <EditorContent editor={editor} className="h-full text-gray-700" />
             </div>
-            {/* I've moved the border-b from the header to an empty div below the header */}
             <div className="border-b border-gray-200"></div>
 
             {/* Bottom Toolbar */}

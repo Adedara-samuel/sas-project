@@ -1,4 +1,5 @@
 /* eslint-disable @next/next/no-img-element */
+// src/app/profile/page.tsx
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
@@ -13,9 +14,9 @@ import axios from 'axios'
 
 export default function ProfilePage() {
     const { user, setUser, authChecked } = useStore()
-    const [localName, setLocalName] = useState(user?.name || '')
-    const [localSchool, setLocalSchool] = useState(user?.school || '')
-    const [localDepartment, setLocalDepartment] = useState(user?.department || '')
+    const [localName, setLocalName] = useState('')
+    const [localSchool, setLocalSchool] = useState('')
+    const [localDepartment, setLocalDepartment] = useState('')
     const [localPhotoFile, setLocalPhotoFile] = useState<File | null>(null)
 
     const [isEditing, setIsEditing] = useState(false)
@@ -35,38 +36,59 @@ export default function ProfilePage() {
             const userDocSnap = await getDoc(userDocRef)
 
             let firestoreData: Partial<User> = {}
+            let shouldUpdateFirestore = false
+            
             if (userDocSnap.exists()) {
                 firestoreData = userDocSnap.data() as Partial<User>
+                
+                // If a new name is available in Firebase Auth and Firestore's name is the default 'User', update it.
+                if (auth.currentUser.displayName && (!firestoreData.name || firestoreData.name === 'User')) {
+                    firestoreData.name = auth.currentUser.displayName
+                    shouldUpdateFirestore = true
+                }
             } else {
+                // For new users, create a document with data from Firebase Auth
                 firestoreData = {
-                    name: auth.currentUser.displayName,
-                    photoURL: auth.currentUser.photoURL,
+                    name: auth.currentUser.displayName || '',
+                    photoURL: auth.currentUser.photoURL || null,
                     role: 'student',
                     school: '',
                     department: '',
                 }
+                shouldUpdateFirestore = true
+            }
+            
+            // Update Firestore if needed
+            if (shouldUpdateFirestore) {
                 await setDoc(userDocRef, firestoreData, { merge: true })
             }
+
+            // Determine the display name with proper priority
+            const displayName = 
+                firestoreData.name || 
+                auth.currentUser.displayName || 
+                user?.name || 
+                auth.currentUser.email?.split('@')[0] || // Use part of the email as a fallback name
+                'User'; // Fallback to 'User' if everything else fails
 
             const updatedUser: User = {
                 id: auth.currentUser.uid,
                 uid: auth.currentUser.uid,
                 email: auth.currentUser.email,
-                displayName: auth.currentUser.displayName,
+                displayName: displayName,
                 photoURL: firestoreData.photoURL || auth.currentUser.photoURL || null,
                 metadata: {
                     creationTime: auth.currentUser.metadata.creationTime,
                     lastSignInTime: auth.currentUser.metadata.lastSignInTime,
                 },
-                name: firestoreData.name || auth.currentUser.displayName || null,
+                name: displayName,
                 role: (firestoreData.role as 'admin' | 'student') || 'student',
                 school: firestoreData.school || null,
                 department: firestoreData.department || null,
             }
 
             setUser(updatedUser)
-            setLocalName(updatedUser.name || '')
-            // The fix is here: update the local state with the fetched data
+            setLocalName(displayName)
             setLocalSchool(updatedUser.school || '')
             setLocalDepartment(updatedUser.department || '')
         } catch (error: unknown) {
@@ -79,7 +101,7 @@ export default function ProfilePage() {
         } finally {
             setLoading(false)
         }
-    }, [authChecked, setUser])
+    }, [authChecked, setUser, user?.name])
 
     useEffect(() => {
         if (authChecked) {
@@ -243,7 +265,7 @@ export default function ProfilePage() {
                                         />
                                     ) : (
                                         <h1 className="text-3xl font-extrabold text-gray-900 transition-colors duration-300">
-                                            {user.name || user.displayName || 'User'}
+                                            {user.name || user.displayName}
                                         </h1>
                                     )}
                                     <p className="text-gray-600 text-lg mt-1">{user.email}</p>

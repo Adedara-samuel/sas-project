@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { collection, onSnapshot, query, where, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import LoadingSpinner from '@/components/ui/loading-spinner';
+import parse from 'html-react-parser'; // Import the parser
 
 export default function NotesPage() {
     const { notes, setNotes, authChecked, user, courses } = useStore()
@@ -108,9 +109,10 @@ export default function NotesPage() {
                             >
                                 <div className="p-6">
                                     <h3 className="font-bold text-lg text-gray-900 mb-2 line-clamp-2">{note.title}</h3>
-                                    <p className="text-gray-600 text-sm mb-4 line-clamp-3">
-                                        {note.content}
-                                    </p>
+                                    {/* Fix: Use a div with `prose` class and `html-react-parser` */}
+                                    <div className="prose text-gray-600 text-sm mb-4">
+                                        {parse(note.content)}
+                                    </div>
                                     <div className="flex justify-between items-center text-xs text-gray-500 border-t pt-4">
                                         <span>{new Date(note.createdAt).toLocaleDateString()}</span>
                                         {note.courseId && (

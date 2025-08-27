@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client'
 
@@ -6,15 +7,13 @@ import { useParams, useRouter } from 'next/navigation'
 import { useStore } from '@/store/useStore'
 import { db } from '@/lib/firebase'
 import { doc, getDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp } from 'firebase/firestore'
-import { FiArrowLeft, FiEdit, FiTrash2, FiSave, FiX, FiCheckCircle, FiXCircle, FiBookOpen } from 'react-icons/fi'
+import { FiArrowLeft, FiEdit, FiTrash2, FiSave, FiX, FiCheckCircle, FiXCircle, FiBookOpen, FiVolume2, FiStopCircle } from 'react-icons/fi'
 import Link from 'next/link'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import parse from 'html-react-parser';
 
-// Import SimpleMDE editor and its types
-import SimpleMdeReact from 'react-simplemde-editor';
-import 'easymde/dist/easymde.min.css';
-import EasyMDE from 'easymde';
+// Import Tiptap components
+import { useEditor, EditorContent } from '@tiptap/react'
+import StarterKit from '@tiptap/starter-kit'
 
 // Define the Note and Course interfaces for type safety
 interface Note {
@@ -58,10 +57,27 @@ export default function NoteDetailPage() {
     const [deleting, setDeleting] = useState(false);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+    const [isSpeaking, setIsSpeaking] = useState(false); // New state for TTS
 
     const id = params?.id;
 
-    // Effect to auto-dismiss messages
+    // Use Tiptap editor for editing
+    const editor = useEditor({
+        extensions: [
+            StarterKit,
+        ],
+        content: editNote.content,
+        onUpdate: ({ editor }) => {
+            setEditNote(prev => ({ ...prev, content: editor.getHTML() }))
+        },
+        editorProps: {
+            attributes: {
+                class: 'focus:outline-none w-full h-full'
+            },
+        },
+        immediatelyRender: false,
+    });
+
     useEffect(() => {
         if (message) {
             const timer = setTimeout(() => {
@@ -72,7 +88,6 @@ export default function NoteDetailPage() {
     }, [message]);
 
     useEffect(() => {
-        // Handle cases where the id might be an array (for catch-all routes)
         const noteId = Array.isArray(id) ? id[0] : id;
 
         if (!noteId || !user?.uid) {
@@ -99,6 +114,9 @@ export default function NoteDetailPage() {
                         title: fetchedNote.title,
                         content: fetchedNote.content
                     });
+                    if (editor) {
+                        editor.commands.setContent(fetchedNote.content, { emitUpdate: false });
+                    }
                 } else {
                     console.warn('Note not found or user does not have permission.');
                     router.push('/notes');
@@ -112,7 +130,7 @@ export default function NoteDetailPage() {
         };
 
         fetchNote();
-    }, [id, router, user]);
+    }, [id, router, user, editor]);
 
     const isOwner = user && note && note.userId === user.uid;
 
@@ -162,45 +180,49 @@ export default function NoteDetailPage() {
         }
     };
 
+    // New function for Text-to-Speech
+    const handleTextToSpeech = () => {
+        if (!window.speechSynthesis) {
+            setMessage({ text: "Your browser doesn't support Text-to-Speech.", type: 'error' });
+            return;
+        }
+
+        // If already speaking, cancel the speech
+        if (window.speechSynthesis.speaking) {
+            window.speechSynthesis.cancel();
+            setIsSpeaking(false);
+            return;
+        }
+
+        // Clean the HTML content to get plain text
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(note?.content || "", 'text/html');
+        const cleanText = doc.body.textContent || "";
+
+        if (!cleanText.trim()) {
+            setMessage({ text: 'Note has no readable content.', type: 'error' });
+            return;
+        }
+
+        const utterance = new SpeechSynthesisUtterance(cleanText);
+
+        // Set event handlers to update the state
+        utterance.onend = () => setIsSpeaking(false);
+        utterance.onerror = (event) => {
+            console.error('SpeechSynthesis Utterance Error:', event.error);
+            setMessage({ text: 'Text-to-Speech failed. Please try again.', type: 'error' });
+            setIsSpeaking(false);
+        };
+
+        // Start the speech
+        setIsSpeaking(true);
+        window.speechSynthesis.speak(utterance);
+    };
+
     const getCourseTitle = (courseId: string) => {
         const course = courses.find((c: Course) => c.id === courseId);
         return course ? course.title : 'General';
     };
-
-    // SimpleMDE options, memoized
-    const mdeOptions = useMemo(() => {
-        return {
-            autofocus: true,
-            spellChecker: false,
-            toolbar: [
-                'bold', 'italic', 'heading', '|',
-                'quote', 'unordered-list', 'ordered-list', '|',
-                'link', 'image',
-                {
-                    name: "preview",
-                    action: (editor: EasyMDE) => EasyMDE.togglePreview(editor),
-                    className: "fa fa-eye no-disable",
-                    title: "Toggle Preview"
-                },
-                {
-                    name: "side-by-side",
-                    action: (editor: EasyMDE) => EasyMDE.toggleSideBySide(editor),
-                    className: "fa fa-columns no-disable no-mobile",
-                    title: "Toggle Side by Side"
-                },
-                {
-                    name: "fullscreen",
-                    action: (editor: EasyMDE) => EasyMDE.toggleFullScreen(editor),
-                    className: "fa fa-arrows-alt no-disable no-mobile",
-                    title: "Toggle Fullscreen"
-                },
-                '|',
-                'guide'
-            ],
-            status: false,
-        } as EasyMDE.Options;
-    }, []);
-
 
     if (loading) {
         return (
@@ -225,7 +247,6 @@ export default function NoteDetailPage() {
         );
     }
 
-    // Helper to get the display date, handling both Date and Timestamp types
     const getDisplayDate = (date: Date | Timestamp | null) => {
         if (!date) return 'N/A';
         if (date instanceof Timestamp) {
@@ -250,6 +271,15 @@ export default function NoteDetailPage() {
                         <div className="flex space-x-2">
                             {!isEditing ? (
                                 <>
+                                    {/* Text-to-Speech Button */}
+                                    <button
+                                        onClick={handleTextToSpeech}
+                                        className="flex items-center px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold transition-all duration-200 shadow-md transform hover:scale-105"
+                                    >
+                                        {isSpeaking ? <FiStopCircle className="mr-2" /> : <FiVolume2 className="mr-2" />}
+                                        {isSpeaking ? 'Stop Reading' : 'Read Note'}
+                                    </button>
+
                                     <button
                                         onClick={() => setIsEditing(true)}
                                         className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-all duration-200 shadow-md transform hover:scale-105"
@@ -311,15 +341,9 @@ export default function NoteDetailPage() {
                                 onChange={(e) => setEditNote({ ...editNote, title: e.target.value })}
                             />
                         </div>
-
                         <div className="mb-6">
                             <label htmlFor="note-content" className="block text-sm font-semibold mb-2 text-gray-800">Content</label>
-                            <SimpleMdeReact
-                                value={editNote.content}
-                                onChange={(value) => setEditNote({ ...editNote, content: value })}
-                                options={mdeOptions}
-                                className="w-full text-gray-800 font-sans leading-relaxed"
-                            />
+                            <EditorContent editor={editor} className="h-full text-gray-700" />
                         </div>
                     </div>
                 ) : (
@@ -337,8 +361,9 @@ export default function NoteDetailPage() {
                             )}
                         </div>
 
+                        {/* Corrected line: Use a div for the prose styling and the HTML parser for content */}
                         <div className="prose max-w-none text-gray-800 leading-relaxed">
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{note.content}</ReactMarkdown>
+                            {parse(note.content)}
                         </div>
                     </div>
                 )}
