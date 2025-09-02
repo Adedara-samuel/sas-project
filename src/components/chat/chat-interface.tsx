@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 /* eslint-disable react/no-unescaped-entities */
 'use client'
 
@@ -9,6 +10,8 @@ import {
     FiTrash2,
     FiXCircle,
     FiMenu,
+    FiImage,
+    FiPaperclip
 } from 'react-icons/fi'
 import { getAIResponse } from '@/lib/gemini'
 import LoadingSpinner from '@/components/ui/loading-spinner'
@@ -24,6 +27,13 @@ interface ChatInterfaceProps {
     userDisplayName?: string | null;
     userRole?: string | null;
 }
+
+const SUPPORTED_MIMES = [
+    'image/png', 'image/jpeg', 'image/jpg', 'image/gif',
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // DOCX
+    'application/vnd.oasis.opendocument.text' // ODT
+];
 
 export default function ChatInterface({
     initialContext,
@@ -41,7 +51,12 @@ export default function ChatInterface({
     const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
     const [loadingSessions, setLoadingSessions] = useState(true);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [filePreview, setFilePreview] = useState<string | null>(null);
+    const [fileName, setFileName] = useState<string | null>(null);
+    const [fileData, setFileData] = useState<string | null>(null);
+    const [fileMimeType, setFileMimeType] = useState<string | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Auto-scroll to the bottom whenever messages change
     useEffect(() => {
@@ -75,7 +90,6 @@ export default function ChatInterface({
         }
     }, [currentSessionId, user?.uid]);
 
-    // Memoize handleNewChat
     const handleNewChat = useCallback(async (isAutoCreate = false) => {
         if (!user?.uid) return;
 
@@ -102,6 +116,10 @@ export default function ChatInterface({
             setCurrentSessionId(newSessionId);
             setMessages([]);
             setInput('');
+            setFilePreview(null);
+            setFileName(null);
+            setFileData(null);
+            setFileMimeType(null);
 
             if (isSidebarOpen) {
                 setIsSidebarOpen(false);
@@ -140,24 +158,36 @@ export default function ChatInterface({
     };
 
     const handleSendMessage = async () => {
-        if (!user?.uid) {
-            console.error("User not authenticated. Cannot send message.");
+        if (!user?.uid || (!input.trim() && !fileData)) {
             return;
         }
-
-        if (!input.trim()) return;
 
         if (!currentSessionId) {
             console.error("No active chat session. Cannot send message.");
             return;
         }
 
-        const userMessageContent = input.trim();
-        const userMessage: ChatMessage = { role: 'user', content: userMessageContent, timestamp: Timestamp.now() };
+        // Ensure content is not empty if a file is uploaded
+        const userMessageContent = input.trim() || `[File uploaded: ${fileName}]`;
+
+        // Correctly create the ChatMessage object, ensuring no 'undefined' properties are included.
+        const userMessage: ChatMessage = {
+            role: 'user',
+            content: userMessageContent,
+            timestamp: Timestamp.now(),
+            // Conditionally add file properties only if they exist
+            ...(fileData && { fileData }),
+            ...(fileMimeType && { fileMimeType }),
+            ...(fileName && { fileName }),
+        };
 
         const updatedMessages = [...messages, userMessage];
         setMessages(updatedMessages);
         setInput('');
+        setFilePreview(null);
+        setFileName(null);
+        setFileData(null);
+        setFileMimeType(null);
         setIsLoading(true);
 
         try {
@@ -169,11 +199,19 @@ export default function ChatInterface({
                 fullAIContext += ` Their role is ${userRole}.`;
             }
 
-            const aiResponseContent = await getAIResponse(userMessage.content, fullAIContext, updatedMessages);
+            // Pass fileData and fileMimeType to the AI function
+            const aiResponseContent = await getAIResponse(userMessageContent, fullAIContext, updatedMessages, fileData || undefined, fileMimeType || undefined);
 
-            const assistantMessage: ChatMessage = { role: 'assistant', content: aiResponseContent, timestamp: Timestamp.now() };
+            // Correctly create the assistant message
+            const assistantMessage: ChatMessage = {
+                role: 'assistant',
+                content: aiResponseContent,
+                timestamp: Timestamp.now(),
+            };
+
             const finalMessages = [...updatedMessages, assistantMessage];
             setMessages(finalMessages);
+            // Save the updated array to Firestore
             await updateChatSessionInFirestore(finalMessages);
 
         } catch (error) {
@@ -188,6 +226,48 @@ export default function ChatInterface({
             await updateChatSessionInFirestore(finalMessagesWithError);
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (file) {
+            if (!SUPPORTED_MIMES.includes(file.type)) {
+                alert('File type not supported. Please upload an image, PDF, or DOCX file.');
+                return;
+            }
+
+            setFileName(file.name);
+            setFileMimeType(file.type);
+
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                const base64String = reader.result as string;
+                // Remove the data URL prefix to get the pure Base64 string
+                setFileData(base64String.split(',')[1]);
+
+                // Set file preview for images and documents
+                if (file.type.startsWith('image/')) {
+                    setFilePreview(base64String);
+                } else if (file.type === 'application/pdf') {
+                    setFilePreview('/images/pdf-icon.png'); // Provide a local icon
+                } else if (file.type.includes('wordprocessingml.document')) {
+                    setFilePreview('/images/docx-icon.png'); // Provide a local icon
+                } else {
+                    setFilePreview(null); // No preview for other file types
+                }
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    const handleRemoveFile = () => {
+        setFilePreview(null);
+        setFileName(null);
+        setFileData(null);
+        setFileMimeType(null);
+        if (fileInputRef.current) {
+            fileInputRef.current.value = "";
         }
     };
 
@@ -251,6 +331,12 @@ export default function ChatInterface({
         (chatType === 'course' && currentCourse?.title ? `Chat for ${currentCourse.title}` : "General Chat");
     const currentChatSubtitle = chatType === 'course' && currentCourse?.code ? currentCourse.code : "Your smart companion for all things academic.";
 
+    const getFileIcon = (mimeType: string) => {
+        if (mimeType.startsWith('image/')) return <FiImage size={24} className="text-gray-600" />;
+        if (mimeType === 'application/pdf') return <FiPaperclip size={24} className="text-red-500" />;
+        if (mimeType.includes('wordprocessingml.document')) return <FiPaperclip size={24} className="text-blue-500" />;
+        return <FiPaperclip size={24} className="text-gray-600" />;
+    };
 
     return (
         <div className="flex w-full h-screen overflow-hidden bg-gray-50 relative">
@@ -366,7 +452,13 @@ export default function ChatInterface({
                                             : 'bg-gray-200 text-gray-800 rounded-bl-lg'
                                         }`}
                                 >
-                                    {message.content}
+                                    {message.fileMimeType && message.fileData && (
+                                        <div className="mb-2 p-2 bg-gray-300 rounded-lg flex items-center space-x-2">
+                                            {getFileIcon(message.fileMimeType)}
+                                            <span className="text-sm font-medium text-gray-700">{message.fileName}</span>
+                                        </div>
+                                    )}
+                                    <p>{message.content}</p>
                                 </div>
                             </div>
                         ))
@@ -384,7 +476,41 @@ export default function ChatInterface({
 
                 {/* Input Area */}
                 <div className="p-4 sm:p-6 flex-shrink-0 bg-white border-t border-gray-100">
+                    {filePreview && (
+                        <div className="relative mb-4 p-2 bg-gray-100 rounded-lg flex items-center space-x-4">
+                            {fileMimeType?.startsWith('image/') ? (
+                                <img src={filePreview} alt="Preview" className="max-h-32 rounded-md" />
+                            ) : (
+                                <div className="flex items-center space-x-2">
+                                    <FiPaperclip size={24} className="text-gray-500" />
+                                    <span className="text-sm font-medium text-gray-700">{fileName}</span>
+                                </div>
+                            )}
+                            <button
+                                onClick={handleRemoveFile}
+                                className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 shadow-md"
+                                title="Remove file"
+                            >
+                                <FiXCircle size={16} />
+                            </button>
+                        </div>
+                    )}
                     <div className="relative flex items-center bg-gray-100 rounded-full pl-6 pr-2 py-2 shadow-sm">
+                        <button
+                            onClick={() => fileInputRef.current?.click()}
+                            className="p-2 mr-2 text-gray-600 hover:text-blue-600 transition-colors duration-200"
+                            title="Upload a file"
+                        >
+                            <FiPaperclip size={20} />
+                        </button>
+                        <input
+                            type="file"
+                            ref={fileInputRef}
+                            onChange={handleFileUpload}
+                            className="hidden"
+                            accept={SUPPORTED_MIMES.join(',')}
+                            disabled={isLoading}
+                        />
                         <input
                             type="text"
                             value={input}
@@ -396,7 +522,7 @@ export default function ChatInterface({
                         />
                         <button
                             onClick={handleSendMessage}
-                            disabled={isLoading || !input.trim()}
+                            disabled={isLoading || (!input.trim() && !fileData)}
                             className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-full transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {isLoading ? (

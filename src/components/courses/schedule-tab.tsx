@@ -338,14 +338,14 @@ export default function ScheduleTab() {
                         <div className="flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-5 space-y-5 sm:space-y-6 gap-4 mt-6">
                             <button
                                 onClick={() => { setIsAdding(false); setEditingScheduleId(null); setMessage(null); }}
-                                className="w-full sm:w-auto bg-gray-200 hover:bg-gray-300 text-gray-700 px-5 py-2.5 rounded-lg flex items-center justify-center font-semibold transition-colors duration-200"
+                                className="w-full h-fit sm:w-auto bg-gray-200 hover:bg-gray-300 text-gray-700 px-5 py-2.5 rounded-lg flex items-center justify-center font-semibold transition-colors duration-200"
                                 disabled={loading}
                             >
                                 <FiXCircle className="mr-2 text-lg" /> Cancel
                             </button>
                             <button
                                 onClick={handleAddOrUpdateSchedule}
-                                className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg flex items-center justify-center font-semibold shadow-md transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="w-full h-fit sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg flex items-center justify-center font-semibold shadow-md transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                                 disabled={loading}
                             >
                                 {loading ? (

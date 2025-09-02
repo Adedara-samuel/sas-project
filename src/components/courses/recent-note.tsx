@@ -6,6 +6,8 @@ import { db } from '@/lib/firebase'
 import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore'
 import LoadingSpinner from '@/components/ui/loading-spinner'
 import Link from 'next/link'
+import parse from 'html-react-parser'; // Import html-react-parser
+import DOMPurify from 'dompurify'; // Import DOMPurify
 
 export default function RecentNotes() {
     const { user, authChecked, courses } = useStore()
@@ -23,7 +25,7 @@ export default function RecentNotes() {
         const q = query(
             collection(db, 'notes'),
             where('userId', '==', user.uid),
-            orderBy('updatedAt', 'desc') // This sorts by the most recently updated notes first
+            orderBy('updatedAt', 'desc')
         );
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -39,7 +41,7 @@ export default function RecentNotes() {
                     updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : new Date(),
                 };
             });
-            setRecentNotes(fetchedNotes.slice(0, 5)); // This takes only the top 5 notes from the sorted list
+            setRecentNotes(fetchedNotes.slice(0, 5));
             setLoading(false);
         }, (error) => {
             console.error("Error fetching recent notes:", error);
@@ -79,9 +81,11 @@ export default function RecentNotes() {
                         <li key={note.id} className="border-l-4 border-amber-500 pl-3 py-1">
                             <Link href={`/notes/${note.id}`} className="block">
                                 <p className="text-sm font-semibold text-gray-800 line-clamp-1">{note.title}</p>
-                                <p className="text-xs text-gray-600 line-clamp-2 mt-0.5">
-                                    {note.content.substring(0, 100)}{note.content.length > 100 ? '...' : ''}
-                                </p>
+                                {/* This is the key change to render HTML correctly */}
+                                <div className="text-xs text-gray-600 line-clamp-2 mt-0.5">
+                                    {/* Sanitize the HTML before parsing */}
+                                    {parse(DOMPurify.sanitize(note.content))}
+                                </div>
                                 <p className="text-xs text-gray-500 mt-0.5">
                                     Course: <span className="font-medium">{getCourseTitle(note.courseId)}</span>
                                 </p>

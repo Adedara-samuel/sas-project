@@ -33,6 +33,7 @@ export interface Book {
     category?: string
     availableCopies: number
     createdAt: Date
+    addedBy?: string
 }
 
 export interface Note {
@@ -68,6 +69,9 @@ export interface ChatMessage {
     fileType?: string;
     fileSize?: number;
     timestamp: Timestamp;
+    // New properties for file upload capability
+    fileData?: string;
+    fileMimeType?: string;
 }
 
 export interface ChatSession {
@@ -102,6 +106,19 @@ interface StoreState {
     setAuthChecked: (checked: boolean) => void
     toggleDarkMode: () => void
     setLanguage: (language: 'en' | 'fr' | 'es') => void
+}
+
+export interface Resource {
+    id: string;
+    title: string;
+    description?: string;
+    type: 'book' | 'material';
+    source: string; // e.g., 'Book' or course title
+    url: string; // for both books and materials
+    coverUrl?: string; // only for books
+    fileType?: string; // only for materials
+    addedBy: string; // a string with the user's name or ID
+    createdAt: Date;
 }
 
 export const useStore = create<StoreState>()(

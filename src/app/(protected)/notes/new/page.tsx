@@ -144,12 +144,12 @@ export default function NewNotePage() {
             <div className="border-b border-gray-200"></div>
 
             {/* Bottom Toolbar */}
-            <div className="flex-shrink-0 flex items-center justify-around text-gray-500 p-4 bg-white border-t border-gray-200">
+            {/* <div className="flex-shrink-0 flex items-center justify-around text-gray-500 p-4 bg-white border-t border-gray-200">
                 <FaRegCheckSquare className="text-xl cursor-pointer" />
                 <FaCamera className="text-xl cursor-pointer" />
                 <FiMoreHorizontal className="text-xl cursor-pointer" />
                 <FaPencilAlt className="text-xl cursor-pointer" />
-            </div>
+            </div> */}
         </div>
     )
 }

@@ -1,4 +1,3 @@
-/* eslint-disable @next/next/no-img-element */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client'
 
@@ -7,8 +6,9 @@ import { useParams } from 'next/navigation'
 import { useStore } from '@/store/useStore'
 import { db } from '@/lib/firebase'
 import { doc, getDoc } from 'firebase/firestore'
-import { FiArrowLeft, FiBook, FiUser, FiCalendar, FiClock } from 'react-icons/fi'
+import { FiArrowLeft, FiBook, FiUser, FiCalendar, FiClock, FiFileText } from 'react-icons/fi'
 import Link from 'next/link'
+import Image from 'next/image'
 
 export default function BookDetailPage() {
     const params = useParams()
@@ -19,9 +19,7 @@ export default function BookDetailPage() {
 
     const id = params?.id
 
-    // Use a useEffect to handle the data fetching
     useEffect(() => {
-        // Type-guard: Check if 'id' exists and is a string
         if (typeof id !== 'string') {
             setLoading(false)
             return
@@ -31,10 +29,11 @@ export default function BookDetailPage() {
             try {
                 const bookDoc = await getDoc(doc(db, 'books', id))
                 if (bookDoc.exists()) {
+                    const data = bookDoc.data();
                     setBook({
                         id: bookDoc.id,
-                        ...bookDoc.data(),
-                        createdAt: bookDoc.data().createdAt?.toDate()
+                        ...data,
+                        createdAt: data.createdAt?.toDate()
                     })
                 }
             } catch (error) {
@@ -45,7 +44,7 @@ export default function BookDetailPage() {
         }
 
         fetchBook()
-    }, [id]) // The useEffect dependency is now just the 'id' variable
+    }, [id])
 
     const handleBorrow = async () => {
         if (!user || !book) return
@@ -53,8 +52,6 @@ export default function BookDetailPage() {
         setBorrowing(true)
         try {
             // Implement borrow logic here
-            // This would typically create a borrowing record in Firestore
-            // and decrement the availableCopies count
             alert(`You have borrowed "${book.title}"`)
         } catch (error) {
             console.error('Error borrowing book:', error)
@@ -93,15 +90,23 @@ export default function BookDetailPage() {
 
             <div className="bg-white rounded-xl shadow-md overflow-hidden">
                 <div className="md:flex">
-                    <div className="md:w-1/3 p-6">
-                        <img
-                            src={book.coverUrl}
-                            alt={book.title}
-                            className="w-full rounded-lg shadow"
-                            onError={(e) => {
-                                (e.target as HTMLImageElement).src = '/images/default-book-cover.jpg'
-                            }}
-                        />
+                    <div className="md:w-1/3 p-6 flex items-center justify-center bg-gray-100">
+                        {/* Conditional rendering for image or icon */}
+                        {book.coverUrl ? (
+                            <Image
+                                src={book.coverUrl}
+                                alt={book.title}
+                                width={300}
+                                height={400}
+                                className="rounded-lg shadow"
+                                style={{ objectFit: "cover" }}
+                                unoptimized={true}
+                            />
+                        ) : (
+                            <div className="flex items-center justify-center w-full h-full text-gray-400">
+                                <FiFileText size={100} />
+                            </div>
+                        )}
                     </div>
 
                     <div className="md:w-2/3 p-6">
@@ -115,8 +120,8 @@ export default function BookDetailPage() {
                                 </span>
                             )}
                             <span className={`px-2 py-1 text-xs rounded-full ${book.availableCopies > 0
-                                    ? 'bg-green-50 text-green-600 '
-                                    : 'bg-amber-50 text-amber-600 '
+                                ? 'bg-green-50 text-green-600 '
+                                : 'bg-amber-50 text-amber-600 '
                                 }`}>
                                 {book.availableCopies > 0 ? `${book.availableCopies} available` : 'Checked out'}
                             </span>

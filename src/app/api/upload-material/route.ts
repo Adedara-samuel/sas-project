@@ -1,158 +1,83 @@
-// /* eslint-disable @typescript-eslint/no-explicit-any */
-// import { NextResponse } from 'next/server';
-// // import { v2 as cloudinary } from 'cloudinary';
-// import { Buffer } from 'buffer';
-// import cloudinary from 'cloudinary';
-
-// // Configure Cloudinary with your environment variables
-// cloudinary.v2.config({
-//     cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
-//     api_key: process.env.CLOUDINARY_API_KEY,
-//     api_secret: process.env.CLOUDINARY_API_SECRET,
-// });
-
-// export async function POST(req: Request) {
-//     let formData: FormData | null = null;
-//     let fileName = 'unknown';
-
-//     try {
-//         formData = await req.formData();
-//         const file = formData.get('file');
-
-//         if (!file || typeof file === 'string') {
-//             return NextResponse.json(
-//                 { error: 'No file uploaded or invalid file.', fileName },
-//                 { status: 400 }
-//             );
-//         }
-
-//         fileName = file.name || fileName;
-//         const arrayBuffer = await file.arrayBuffer();
-//         const buffer = Buffer.from(arrayBuffer);
-
-//         // Determine upload settings based on file type
-//         const isPdf = fileName.toLowerCase().endsWith('.pdf');
-
-//         const uploadOptions: any = {
-//             folder: 'course-materials',
-//             resource_type: isPdf ? 'raw' : 'auto', // PDFs = raw, others auto
-//         };
-
-//         if (isPdf) {
-//             uploadOptions.access_mode = 'public';
-//             uploadOptions.type = 'upload';
-//         }
-
-//         // Upload to Cloudinary
-//         const uploadResult = await new Promise((resolve, reject) => {
-//             const uploadStream = cloudinary.v2.uploader.upload_stream(
-//                 uploadOptions,
-//                 (error, result) => {
-//                     if (error) {
-//                         return reject(error);
-//                     }
-//                     resolve(result);
-//                 }
-//             );
-//             uploadStream.end(buffer);
-//         });
-
-//         const { secure_url, resource_type, bytes, format } = uploadResult as any;
-
-//         const result = {
-//             secure_url,
-//             resource_type,
-//             bytes,
-//             format,
-//             file_name: fileName,
-//         };
-
-//         return NextResponse.json(result, { status: 200 });
-//     } catch (error) {
-//         const errorMessage =
-//             error instanceof Error
-//                 ? error.message
-//                 : 'Internal server error. Check server logs for more details.';
-//         console.error(
-//             'Unhandled error in /api/upload-material route:',
-//             error,
-//             'File:',
-//             fileName
-//         );
-//         return NextResponse.json(
-//             {
-//                 error: errorMessage,
-//                 file_name: fileName,
-//             },
-//             { status: 500 }
-//         );
-//     }
-// }
-
-
-// // export function getSignedPdfUrl(publicId: string) {
-// //     return cloudinary.v2.utils.sign_url(publicId, {
-// //       type: 'authenticated',
-// //       resource_type: 'raw',
-// //       expires_at: Math.floor(Date.now() / 1000) + 300 // 5 mins expiry
-// //     });
-// //   }
-
-
+// src/app/api/upload-material/route.ts
 import { NextResponse } from 'next/server';
-import { Buffer } from 'buffer';
+import cloudinary from 'cloudinary';
+
+// Your .env.local file should have these keys:
+// CLOUDINARY_CLOUD_NAME="your_cloud_name"
+// CLOUDINARY_API_KEY="your_api_key"
+// CLOUDINARY_API_SECRET="your_api_secret"
+
+// Configure Cloudinary with your credentials
+cloudinary.v2.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 export async function POST(req: Request) {
-    let formData: FormData | null = null;
     let fileName = 'unknown';
 
     try {
-        formData = await req.formData();
+        const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+        const apiKey = process.env.CLOUDINARY_API_KEY;
+        const apiSecret = process.env.CLOUDINARY_API_SECRET;
+
+        if (!cloudName || !apiKey || !apiSecret) {
+            console.error('Missing Cloudinary API keys');
+            return NextResponse.json(
+                { error: 'Server configuration error: Missing Cloudinary API keys.' },
+                { status: 500 }
+            );
+        }
+
+        const formData = await req.formData();
         const file = formData.get('file');
 
-        if (!file || typeof file === 'string') {
+        if (!file || typeof file === 'string' || !(file instanceof File)) {
             return NextResponse.json(
-                { error: 'No file uploaded or invalid file.', fileName },
+                { error: 'No file uploaded or invalid file format.' },
                 { status: 400 }
             );
         }
 
         fileName = file.name || fileName;
-        const arrayBuffer = await file.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
+        console.log(`Backend: Received file for upload: ${fileName}`);
 
-        const formDataUpload = new FormData();
-        formDataUpload.append('file', new Blob([buffer], { type: file.type || '' }), fileName);
-        formDataUpload.append('UPLOADCARE_PUB_KEY', process.env.UPLOADCARE_PUBLIC_KEY || '36b2aa3a71b52e3e6d10');
-        formDataUpload.append('UPLOADCARE_STORE', '1');
+        // Convert the File to a Buffer for upload to Cloudinary
+        const buffer = Buffer.from(await file.arrayBuffer());
 
-        const response = await fetch('https://upload.uploadcare.com/base/', {
-            method: 'POST',
-            body: formDataUpload,
+        // Upload the file to Cloudinary
+        const result = await new Promise<cloudinary.UploadApiResponse>((resolve, reject) => {
+            const uploadStream = cloudinary.v2.uploader.upload_stream(
+                { resource_type: 'auto' },
+                (error, res) => {
+                    if (error) {
+                        reject(error);
+                    } else {
+                        resolve(res as cloudinary.UploadApiResponse);
+                    }
+                }
+            );
+            uploadStream.end(buffer);
         });
 
-        if (!response.ok) {
-            throw new Error(`Uploadcare API error: ${response.statusText} `);
-        }
-
-        const data = await response.json();
-        const fileId = data.file;
-        const secureUrl = `https://ucarecdn.com/${fileId}/`;
-
-        console.log(`Uploaded file to Uploadcare: ${secureUrl}, File: ${fileName}`);
-
-        const result = {
-            secure_url: secureUrl,
-            resource_type: 'raw',
-            bytes: buffer.length,
-            format: fileName.split('.').pop() || 'unknown',
-            file_name: fileName,
+        const finalResult = {
+            secure_url: result.secure_url,
+            resource_type: result.resource_type,
+            bytes: result.bytes,
+            format: result.format,
+            file_name: result.original_filename || fileName,
         };
 
-        return NextResponse.json(result, { status: 200 });
+        console.log('Backend: Upload successful:', finalResult);
+        return NextResponse.json(finalResult, { status: 200 });
+
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Internal server error. Check server logs.';
-        console.error('Unhandled error in /api/upload-material:', error, 'File:', fileName);
-        return NextResponse.json({ error: errorMessage, file_name: fileName }, { status: 500 });
+        console.error('Backend: Unhandled error in /api/upload-material:', error, 'File:', fileName);
+        return NextResponse.json(
+            { error: `Upload failed: ${errorMessage}`, file_name: fileName },
+            { status: 500 }
+        );
     }
 }

@@ -1,22 +1,28 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 // src/lib/gemini.ts
 
-import { ChatMessage } from '@/store/useStore'; // Import ChatMessage interface
+import { ChatMessage } from '@/store/useStore';
 
-// Gemini API expects 'model' role for assistant messages
 interface GeminiChatMessage {
     role: 'user' | 'model';
-    parts: { text: string }[];
+    parts: {
+        text?: string;
+        inline_data?: {
+            mime_type: string;
+            data: string;
+        };
+    }[];
 }
 
 /**
- * Sends a prompt to the Gemini 2.0 Flash model and returns the AI's response.
+ * Sends a prompt and an optional file to the Gemini API.
  * @param userPrompt The user's current message.
- * @param context Additional context for the AI (e.g., user role, course info).
- * @param history Optional: Array of previous messages for conversational context.
+ * @param context Additional context for the AI.
+ * @param history Array of previous messages.
+ * @param fileData Optional: Base64 string of the file data.
+ * @param fileMimeType Optional: MIME type of the file (e.g., 'image/jpeg', 'application/pdf').
  * @returns The AI's generated text response.
  */
-export async function getAIResponse(userPrompt: string, context: string, history: ChatMessage[] = [], aiImageData?: undefined): Promise<string> {
+export async function getAIResponse(userPrompt: string, context: string, history: ChatMessage[] = [], fileData?: string, fileMimeType?: string): Promise<string> {
     const apiKey = "AIzaSyBPwTHb2ux_V2o9twLgnhjhwJKroucdGOk";
 
     if (!apiKey) {
@@ -26,20 +32,26 @@ export async function getAIResponse(userPrompt: string, context: string, history
 
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
-    // Prepare chat history for Gemini API, filtering out 'file' messages
     const formattedHistory: GeminiChatMessage[] = history
-        .filter(msg => msg.role !== 'file') // Filter out file messages from history sent to AI
         .map(msg => ({
             role: msg.role === 'assistant' ? 'model' : 'user',
-            parts: [{ text: msg.content }] // FIX: Use msg.content here
+            parts: [{ text: msg.content }]
         }));
 
-    // Add initial context as a system-like message or part of the user's current prompt.
-    // This ensures that the AI always has the base context for every turn.
-    const fullCurrentPrompt = `${context}\n\n${userPrompt}`;
+    const userMessageParts: { text?: string; inline_data?: { mime_type: string; data: string; } }[] = [];
+    if (fileData && fileMimeType) {
+        userMessageParts.push({
+            inline_data: {
+                mime_type: fileMimeType,
+                data: fileData
+            }
+        });
+    }
+
+    userMessageParts.push({ text: `${context}\n\n${userPrompt}` });
 
     const payload = {
-        contents: [...formattedHistory, { role: "user", parts: [{ text: fullCurrentPrompt }] }],
+        contents: [...formattedHistory, { role: "user", parts: userMessageParts }],
         generationConfig: {
             temperature: 0.7,
             topK: 40,
