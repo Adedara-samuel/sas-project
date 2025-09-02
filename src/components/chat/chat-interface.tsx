@@ -1,5 +1,5 @@
-/* eslint-disable @next/next/no-img-element */
 /* eslint-disable react/no-unescaped-entities */
+/* eslint-disable @next/next/no-img-element */
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
@@ -346,7 +346,7 @@ export default function ChatInterface({
                 fixed top-0 left-0 bottom-0 z-20 w-64 bg-white border-r border-gray-200 flex-col flex-shrink-0
                 transform transition-transform duration-300 ease-in-out
                 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-                md:relative md:translate-x-0 md:w-64 h-full mt-15
+                md:relative md:translate-x-0 md:w-64 h-full
             `}>
                 {/* Sidebar Header: This should be fixed at the top */}
                 <div className="p-4 border-b border-gray-200 flex items-center justify-between">
@@ -416,9 +416,11 @@ export default function ChatInterface({
             </div>
 
             {/* Main Chat Area */}
-            <div className="flex-1 flex flex-col relative bg-gray-50 ">
+            <div className={`flex-1 flex flex-col relative bg-gray-50
+                ${isSidebarOpen ? 'hidden md:flex' : 'flex'}`}
+            >
                 {/* Chat Header */}
-                <div className="flex-shrink-0 md:mt-10 bg-white p-4 sm:p-6 border-b border-gray-100 shadow-sm flex items-center justify-between">
+                <div className="flex-shrink-0 bg-white p-4 sm:p-6 border-b border-gray-100 shadow-sm flex items-center justify-between">
                     <button onClick={() => setIsSidebarOpen(true)} className="p-2 mr-3 md:hidden">
                         <FiMenu className="text-2xl text-gray-700" />
                     </button>
@@ -447,7 +449,7 @@ export default function ChatInterface({
                             >
                                 <div
                                     className={`max-w-[75%] p-3 rounded-2xl shadow-sm text-base leading-relaxed
-                                        ${message.role === 'user'
+                                    ${message.role === 'user'
                                             ? 'bg-blue-600 text-white rounded-br-lg'
                                             : 'bg-gray-200 text-gray-800 rounded-bl-lg'
                                         }`}
