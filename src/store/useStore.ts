@@ -1,4 +1,5 @@
 // src/store/useStore.ts
+
 import { Timestamp } from 'firebase/firestore'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
@@ -84,6 +85,14 @@ export interface ChatSession {
     updatedAt: Timestamp;
 }
 
+// New interface for the resource being viewed
+export interface CourseResource {
+    name: string;
+    url: string;
+    type?: string;
+    size?: number;
+}
+
 interface StoreState {
     // The user state now correctly uses the imported User type
     user: User | null
@@ -95,6 +104,9 @@ interface StoreState {
     authChecked: boolean
     darkMode: boolean
     language: 'en' | 'fr' | 'es'
+    
+    // New state for the universal file viewer
+    viewingResource: CourseResource | null
 
     // Actions
     setUser: (user: User | null) => void
@@ -106,19 +118,9 @@ interface StoreState {
     setAuthChecked: (checked: boolean) => void
     toggleDarkMode: () => void
     setLanguage: (language: 'en' | 'fr' | 'es') => void
-}
-
-export interface Resource {
-    id: string;
-    title: string;
-    description?: string;
-    type: 'book' | 'material';
-    source: string; // e.g., 'Book' or course title
-    url: string; // for both books and materials
-    coverUrl?: string; // only for books
-    fileType?: string; // only for materials
-    addedBy: string; // a string with the user's name or ID
-    createdAt: Date;
+    
+    // New actions for the universal file viewer
+    setViewingResource: (resource: CourseResource | null) => void
 }
 
 export const useStore = create<StoreState>()(
@@ -133,6 +135,7 @@ export const useStore = create<StoreState>()(
             authChecked: false,
             darkMode: false,
             language: 'en',
+            viewingResource: null, // Initial state for the viewer
 
             setUser: (user) => set({ user }),
             setCourses: (courses) => set({ courses }),
@@ -142,14 +145,16 @@ export const useStore = create<StoreState>()(
             setCurrentCourse: (course) => set({ currentCourse: course }),
             setAuthChecked: (checked) => set({ authChecked: checked }),
             toggleDarkMode: () => set((state) => ({ darkMode: !state.darkMode })),
-            setLanguage: (language) => set({ language })
+            setLanguage: (language) => set({ language }),
+            setViewingResource: (resource) => set({ viewingResource: resource }), // Action to set the resource
         }),
         {
             name: 'academic-store',
             partialize: (state) => ({
                 darkMode: state.darkMode,
                 language: state.language
-            })
+            }),
+            // Since `viewingResource` is transient UI state, we do not need to persist it.
         }
     )
 )

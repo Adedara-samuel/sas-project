@@ -5,6 +5,7 @@ import AuthProvider from '@/components/auth/auth-provider'; // Import the AuthPr
 import AuthRedirector from '@/components/auth/AuthRedirector';
 import HydrationProvider from '@/components/providers/HydrationProvider';
 import { NotificationManager } from '@/components/NotificationManager';
+import FileViewerModal from '@/components/ui/FileViewer';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -19,11 +20,12 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${inter.className} transition-colors duration-300`}>
         <AuthProvider>
-          <AuthRedirector/>
+          <AuthRedirector />
           <HydrationProvider>
             <NotificationManager />
-          {children}
-        </HydrationProvider>
+            {children}
+            <FileViewerModal />
+          </HydrationProvider>
         </AuthProvider>
       </body>
     </html>

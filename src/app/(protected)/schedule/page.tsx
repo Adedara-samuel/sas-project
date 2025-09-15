@@ -1,3 +1,8 @@
+declare global {
+    var __app_id: string;
+    var __initial_auth_token: string;
+}
+
 /* eslint-disable react/no-unescaped-entities */
 /* eslint-disable react-hooks/exhaustive-deps */
 'use client'
@@ -5,10 +10,11 @@
 import { useState, useEffect } from 'react'
 import { useStore, Schedule } from '@/store/useStore'
 import { db } from '@/lib/firebase'
-import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore'
+import { collection, query, where, onSnapshot, orderBy, doc, setDoc } from 'firebase/firestore'
 import { FiCalendar, FiPlus, FiClock, FiMapPin, FiBookOpen, FiEdit } from 'react-icons/fi'
 import Link from 'next/link'
 import LoadingSpinner from '@/components/ui/loading-spinner'
+import { getMessaging, getToken } from 'firebase/messaging'
 
 export default function SchedulePage() {
     const { user, authChecked, courses } = useStore()
@@ -17,6 +23,68 @@ export default function SchedulePage() {
     const [view, setView] = useState<'week' | 'month'>('week')
 
     const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+
+    // --- Notification Permission & Token Handling ---
+    useEffect(() => {
+        // Only run this effect if the window object is available and auth is ready.
+        if (typeof window === 'undefined' || !authChecked || !user?.uid) {
+            console.log("Authentication not ready or not on client side. Skipping token request.");
+            return;
+        }
+
+        console.log("Authentication is ready, attempting to request token...");
+
+        const requestNotificationPermission = async () => {
+            if ('Notification' in window && 'serviceWorker' in navigator) {
+                // Register the service worker
+                const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js')
+                console.log('Service Worker registered successfully:', registration);
+
+                const permission = await Notification.requestPermission();
+                if (permission === 'granted') {
+                    console.log('Notification permission granted.');
+                    try {
+                        const messaging = getMessaging();
+
+                        setTimeout(async () => {
+                            if (messaging && user?.uid) {
+                                const token = await getToken(messaging, {
+                                    vapidKey: 'BPtxpwfMuQvDIT86hI1w_X8e7-GnDFHNf-mxOp5R4J0eO5FRznQdN602NXJ65wzD1GpjJEo8ao_ERaxPEx9c4V8',
+                                    serviceWorkerRegistration: registration,
+                                });
+
+                                if (token) {
+                                    console.log('FCM token:', token);
+                                    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+                                    const userId = user.uid;
+
+                                    const tokenDocRef = doc(db, `artifacts/${appId}/public/data/fcmTokens`, userId);
+                                    await setDoc(tokenDocRef, {
+                                        token: token,
+                                        userId: userId,
+                                        createdAt: new Date()
+                                    });
+                                    console.log('FCM token saved to Firestore');
+                                } else {
+                                    console.log('No FCM token received.');
+                                }
+                            } else {
+                                console.log('User or Messaging not ready.');
+                            }
+                        }, 500); // Wait for 500ms
+                    } catch (error) {
+                        console.error('Error getting FCM token or saving to Firestore:', error);
+                    }
+                } else {
+                    console.log('Notification permission denied.');
+                }
+            } else {
+                console.warn("Notifications or Service Workers are not supported in this browser.");
+            }
+        };
+
+        requestNotificationPermission();
+    }, [authChecked, user?.uid]);
 
     // --- Real-time Fetching of ALL User Schedules ---
     useEffect(() => {
@@ -190,3 +258,4 @@ export default function SchedulePage() {
         </div>
     )
 }
+const eventDate = new Date();

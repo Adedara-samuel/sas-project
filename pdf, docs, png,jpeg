@@ -1,0 +1,110 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper function to check if the requesting user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper function to check if the request is from a Cloud Function
+    function isServiceAccount() {
+      // Service accounts have a specific type of token
+      return request.auth.token.firebase.sign_in_provider == "custom";
+    }
+
+    // Helper function to check if the user ID on the document matches the authenticated user's UID
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // New Helper function to check for an admin role
+    function isAdmin() {
+      return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
+    }
+
+    // --- Profile Data for the new App Path ---
+    match /artifacts/{appId}/users/{userId}/{documents=**} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // --- Users Collection ---
+    match /users/{userId} {
+      // Allow the user to read/write their own profile
+      allow read, write: if isOwner(userId);
+      // ADDED: Allow the Cloud Function service account to read
+      allow read: if isServiceAccount();
+    }
+
+    // --- Courses Collection ---
+    match /courses/{courseId} {
+      allow read: if isAuthenticated();
+      allow create: if isOwner(request.resource.data.userId);
+      allow update, delete: if isOwner(resource.data.userId);
+    }
+
+    // --- Notes Collection ---
+    match /notes/{noteId} {
+      allow read: if isOwner(resource.data.userId);
+      allow create: if isOwner(request.resource.data.userId);
+      allow update, delete: if isOwner(resource.data.userId);
+    }
+
+    // --- Schedules Collection ---
+    match /schedules/{scheduleId} {
+      // Allow the user to read, update, or delete their own schedules
+      allow read, update, delete: if isOwner(resource.data.userId);
+      // Allow the user to create new schedules
+      allow create: if isOwner(request.resource.data.userId);
+      // ADDED: Allow the Cloud Function service account to read
+      allow read: if isServiceAccount();
+    }
+
+    // --- Books Collection (MODIFIED) ---
+    match /books/{bookId} {
+      // Allow any authenticated user to read all books
+      allow read: if isAuthenticated();
+      
+      // Allow only users with an 'admin' role to create, update, or delete books
+      allow create, update, delete: if isAdmin();
+    }
+
+    // --- AI Chat Sessions ---
+    match /ai_chat_sessions/{sessionId} {
+      allow read, update, delete: if isOwner(resource.data.userId);
+      allow create: if isOwner(request.resource.data.userId);
+    }
+
+    // --- General Catch-All ---
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Allows authenticated users to upload and view files in their own folder
+    match /users/{userId}/{allPaths=**} {
+      allow read, write: if request.auth.uid == userId;
+    }
+    
+    // This is the key rule. It allows anyone to read and
+    // only authenticated users to write files in the 'course-materials' folder.
+   match /course-materials/{allPaths=**} {
+  allow read;
+  allow write: if request.auth != null;
+}
+    
+    // Allows anyone to read files in the 'book-covers' folder.
+    match /book-covers/{allPaths=**} {
+      allow read;
+    }
+
+    // Default rule to deny everything else
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
