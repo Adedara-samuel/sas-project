@@ -3,187 +3,110 @@ import { getFirestore } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
 import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
-
-// Import the Cloud Tasks library and its types
 import { CloudTasksClient, protos } from '@google-cloud/tasks';
 
-// Initialize the Firebase Admin SDK.
+// --- Initialize Firebase Admin ---
 initializeApp();
 const db = getFirestore();
 const messaging = getMessaging();
 
-// Initialize the Cloud Tasks client
+// --- Cloud Tasks Setup ---
 const client = new CloudTasksClient();
 
-// Your project ID and location for the task queue
-const projectId = process.env.GCP_PROJECT || process.env.GCLOUD_PROJECT;
-const location = 'us-central1'; // Or your function's location
+// Use your fixed project ID
+const projectId = "sas-project-12836";
+const location = "us-central1";
+const queuePath = client.queuePath(projectId, location, "notification-queue");
 
-// --- Input Validation ---
-// We must ensure the projectId exists, as it is required for Cloud Tasks.
-if (!projectId) {
-  console.error('Project ID is undefined. Cannot create Cloud Tasks.');
-  throw new Error('Project ID is undefined.');
-}
-
-// A helper to get the full path for the task queue
-const queuePath = client.queuePath(projectId, location, 'notification-queue');
-
-// --- Scheduled Notification Function (Callable by Cloud Tasks) ---
-// This is the function that will actually send the notification.
-// It's not triggered directly by Firestore; it's triggered by a Cloud Task.
+// --- Callable Function: Send Notification ---
 export const sendNotification = onCall(async (request) => {
-  if (!request.auth) {
-    // This check is mainly for testing; Cloud Tasks will not have auth.
-    throw new HttpsError('unauthenticated', 'The function must be called with a user.');
+  // This will be triggered by Cloud Tasks; auth is not required
+  const { title, body } = request.data;
+  
+  if (!title || !body) {
+    throw new HttpsError("invalid-argument", "Missing title or body in request data.");
   }
 
-  const { title, body, userId } = request.data;
-  
-  // Fetch all FCM tokens from the public collection
-  // The schedule app uses 'default-app-id' for testing, so we'll use that.
-  const fcmTokensSnapshot = await db.collection('artifacts/default-app-id/public/data/fcmTokens').get();
-
+  // Fetch all FCM tokens from Firestore
+  const fcmTokensSnapshot = await db.collection("artifacts/default-app-id/public/data/fcmTokens").get();
   const tokens: string[] = [];
-  fcmTokensSnapshot.forEach(doc => {
+
+  fcmTokensSnapshot.forEach((doc) => {
     const token = doc.data().token;
-    if (token) {
-      tokens.push(token);
-    }
+    if (token) tokens.push(token);
   });
 
   if (tokens.length === 0) {
-    console.log(`No FCM tokens found. No messages sent.`);
-    return;
+    console.log("No FCM tokens found. Skipping notification.");
+    return { success: false, message: "No tokens available" };
   }
 
-  // Build the notification message
   const message = {
-    notification: {
-      title: title,
-      body: body,
-    },
-    webpush: {
-      headers: {
-        Urgency: 'high',
-      },
-    },
-    tokens: tokens, // Use `tokens` for sending to multiple devices
+    notification: { title, body },
+    webpush: { headers: { Urgency: "high" } },
+    tokens,
   };
 
   try {
     const response = await messaging.sendEachForMulticast(message);
-    console.log('Successfully sent message:', response);
+    console.log("Successfully sent message:", response.successCount, "sent.");
+    return { success: true, count: response.successCount };
   } catch (error) {
-    console.error('Error sending message:', error);
+    console.error("Error sending message:", error);
+    throw new HttpsError("internal", "Failed to send notifications.");
   }
 });
 
-
-// --- Firestore Trigger Function ---
-// This function is triggered automatically whenever a new schedule event is created.
-export const onScheduleCreate = onDocumentCreated('schedules/{scheduleId}', async (event) => {
-  // Add this check to prevent errors if the document data is missing
+// --- Firestore Trigger: Create Cloud Tasks for Notifications ---
+export const onScheduleCreate = onDocumentCreated("schedules/{scheduleId}", async (event) => {
   if (!event.data) {
-    console.log('Document data is undefined. Skipping function execution.');
+    console.log("No document data found. Skipping.");
     return;
   }
-  
+
   const schedule = event.data.data();
+  const { title, day, startTime, userId, type } = schedule;
 
-  const title = schedule.title;
-  const day = schedule.day;
-  const startTime = schedule.startTime;
-  const userId = schedule.userId;
-  const type = schedule.type;
-
-  const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-  const todayIndex = new Date().getDay(); // 0-6 (Sunday to Saturday)
-  const eventDayIndex = DAYS_OF_WEEK.indexOf(day);
-  
-  // Calculate the difference in days to get the next occurrence
-  let daysDiff = eventDayIndex - todayIndex;
-  if (daysDiff < 0) {
-    daysDiff += 7;
+  if (!title || !day || !startTime) {
+    console.error("Invalid schedule data. Skipping.");
+    return;
   }
 
-  // Get the current date and set it to the next event day
+  const DAYS_OF_WEEK = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  const todayIndex = new Date().getDay();
+  const eventDayIndex = DAYS_OF_WEEK.indexOf(day);
+
+  let daysDiff = eventDayIndex - todayIndex;
+  if (daysDiff < 0) daysDiff += 7;
+
   const eventDate = new Date();
   eventDate.setDate(eventDate.getDate() + daysDiff);
-  
-  // Parse start time (e.g., "13:00")
-  const [hour, minute] = startTime.split(':').map(Number);
+
+  const [hour, minute] = startTime.split(":").map(Number);
   eventDate.setHours(hour, minute, 0, 0);
 
-  // --- 24-Hour Notification ---
-  const twentyFourHourBefore = new Date(eventDate.getTime() - 24 * 60 * 60 * 1000);
-  const twentyFourHourMessage = `24 hours until your ${type} - "${title}"!`;
-
-  // Create a Cloud Task for the 24-hour notification
-  const twentyFourHourTask: protos.google.cloud.tasks.v2.ITask = {
-    httpRequest: {
-      httpMethod: 'POST',
-      url: `https://${location}-${projectId}.cloudfunctions.net/sendNotification`,
-      body: Buffer.from(JSON.stringify({ 
-        title: 'Upcoming Schedule', 
-        body: twentyFourHourMessage, 
-        userId: userId 
-      })).toString('base64'),
-      headers: {
-        'Content-Type': 'application/json',
+  // Helper to create a task
+  async function createTask(triggerDate: Date, msgBody: string) {
+    const task: protos.google.cloud.tasks.v2.ITask = {
+      httpRequest: {
+        httpMethod: "POST",
+        url: `https://${location}-${projectId}.cloudfunctions.net/sendNotification`,
+        body: Buffer.from(JSON.stringify({ title: "Upcoming Schedule", body: msgBody, userId })).toString("base64"),
+        headers: { "Content-Type": "application/json" },
+        oidcToken: { serviceAccountEmail: `${projectId}@appspot.gserviceaccount.com` },
       },
-      oidcToken: {
-        serviceAccountEmail: `${projectId}@appspot.gserviceaccount.com`,
-      },
-    },
-    scheduleTime: {
-      seconds: twentyFourHourBefore.getTime() / 1000,
-    },
-  };
+      scheduleTime: { seconds: Math.floor(triggerDate.getTime() / 1000) },
+    };
 
-  try {
-    const [response] = await client.createTask({
-      parent: queuePath,
-      task: twentyFourHourTask,
-    });
-    console.log(`Created 24-hour notification task: ${response.name}`);
-  } catch (error) {
-    console.error('Failed to create 24-hour task:', error);
+    try {
+      const [response] = await client.createTask({ parent: queuePath, task });
+      console.log(`Created task: ${response.name}`);
+    } catch (error) {
+      console.error("Failed to create task:", error);
+    }
   }
-  
-  // --- 1-Hour Notification ---
-  const oneHourBefore = new Date(eventDate.getTime() - 60 * 60 * 1000);
-  const oneHourMessage = `Your ${type} - "${title}" starts in 1 hour!`;
 
-  // Create a Cloud Task for the 1-hour notification
-  const oneHourTask: protos.google.cloud.tasks.v2.ITask = {
-    httpRequest: {
-      httpMethod: 'POST',
-      url: `https://${location}-${projectId}.cloudfunctions.net/sendNotification`,
-      body: Buffer.from(JSON.stringify({ 
-        title: 'Upcoming Schedule', 
-        body: oneHourMessage, 
-        userId: userId 
-      })).toString('base64'),
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      oidcToken: {
-        serviceAccountEmail: `${projectId}@appspot.gserviceaccount.com`,
-      },
-    },
-    scheduleTime: {
-      seconds: oneHourBefore.getTime() / 1000,
-    },
-  };
-
-  try {
-    const [response] = await client.createTask({
-      parent: queuePath,
-      task: oneHourTask,
-    });
-    console.log(`Created 1-hour notification task: ${response.name}`);
-  } catch (error) {
-    console.error('Failed to create 1-hour task:', error);
-  }
+  // Schedule notifications
+  await createTask(new Date(eventDate.getTime() - 24 * 60 * 60 * 1000), `24 hours until your ${type} - "${title}"!`);
+  await createTask(new Date(eventDate.getTime() - 60 * 60 * 1000), `Your ${type} - "${title}" starts in 1 hour!`);
 });
